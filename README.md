@@ -35,11 +35,11 @@ This repository documents the journey from **functional QA** to **technical QA /
 
 | 类型 Type | 占比 Share |
 |-----------|------------|
-| 自动化项目 Automation Projects | 50% |
-| AI QA 项目 AI QA Projects | 20% |
-| 学习笔记 Study Notes | 15% |
-| 技术总结 Technical Summaries | 10% |
-| 英语内容 English Content | 5% |
+| AI 协同开发 / Vibe Coding | 35% |
+| 工程基础（pytest / playwright） Engineering Fundamentals (pytest / Playwright) | 30% |
+| AI QA | 20% |
+| 英语 English | 10% |
+| 测试资产化 Test Assetization | 5% |
 
 ---
 
