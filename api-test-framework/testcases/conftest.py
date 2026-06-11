@@ -1,7 +1,13 @@
+"""Pytest 全局配置 — fixtures、Allure 集成、HTTP 请求/响应追踪
+Pytest global config — fixtures, Allure integration, HTTP request/response tracking.
+"""
+
 from __future__ import annotations
 
+import json
 from typing import Any, Callable, Dict, Optional
 
+import allure
 import pytest
 import requests
 
@@ -10,6 +16,10 @@ API_KEY = "free_user_3EGUTcDmWVdbGBVgNXvOzjqwC3o"
 LOGIN_URL = f"{API_BASE_URL}/login"
 LOGIN_PAYLOAD = {"email": "eve.holt@reqres.in", "password": "cityslicka"}
 
+
+# ═══════════════════════════════════════════════════════════════
+#  工具函数 | Utility helpers
+# ═══════════════════════════════════════════════════════════════
 
 def _safe_text(resp: requests.Response, limit: int = 4000) -> str:
     try:
@@ -32,9 +42,64 @@ def _dump_response(resp: requests.Response) -> str:
     return "\n".join(lines)
 
 
+def _pretty_json(data: Any) -> str:
+    """将数据转为格式化 JSON 字符串，用于 Allure 附件。"""
+    try:
+        return json.dumps(data, indent=2, ensure_ascii=False)
+    except (TypeError, ValueError):
+        return str(data)
+
+
+def _attach_http_to_allure(resp: requests.Response) -> None:
+    """将一次 HTTP 请求/响应的关键信息附加到 Allure 报告。"""
+    req = resp.request
+
+    # ── 请求信息 ──────────────────────────────────
+    req_info = {
+        "method": req.method,
+        "url": req.url,
+        "headers": dict(req.headers),
+    }
+    try:
+        req_body = json.loads(req.body) if req.body else {}
+    except (json.JSONDecodeError, TypeError):
+        req_body = str(req.body) if req.body else ""
+    req_info["body"] = req_body
+
+    allure.attach(
+        _pretty_json(req_info),
+        name="Request",
+        attachment_type=allure.attachment_type.JSON,
+    )
+
+    # ── 响应信息 ──────────────────────────────────
+    resp_info = {
+        "status_code": resp.status_code,
+        "headers": dict(resp.headers),
+    }
+    try:
+        resp_body = resp.json()
+    except (json.JSONDecodeError, ValueError):
+        resp_body = _safe_text(resp)
+    resp_info["body"] = resp_body
+
+    allure.attach(
+        _pretty_json(resp_info),
+        name="Response",
+        attachment_type=allure.attachment_type.JSON,
+    )
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Fixtures
+# ═══════════════════════════════════════════════════════════════
+
 @pytest.fixture
 def http(request: pytest.FixtureRequest) -> Callable[..., requests.Response]:
     """
+    发送 HTTP 请求，并在 Allure 报告中记录请求/响应。
+    Sends HTTP request and records request/response in Allure report.
+
     用法 | Usage:
       resp = http("POST", url, json=payload, headers=headers)
 
@@ -49,15 +114,30 @@ def http(request: pytest.FixtureRequest) -> Callable[..., requests.Response]:
         headers: Optional[Dict[str, str]] = None,
         **kwargs: Any,
     ) -> requests.Response:
-        resp = requests.request(
-            method=method,
-            url=url,
-            headers=headers,
-            timeout=timeout,
-            **kwargs,
-        )
-        # 挂到 item 上，供失败时打印 | Attach to item for failure dump
-        setattr(request.node, "_last_response", resp)
+        with allure.step(f"{method} {url}"):
+            # 在请求前附加请求体信息（如果可以序列化）
+            req_body_for_report = kwargs.get("json") or kwargs.get("data")
+            if req_body_for_report:
+                allure.attach(
+                    _pretty_json(req_body_for_report),
+                    name="Request Body",
+                    attachment_type=allure.attachment_type.JSON,
+                )
+
+            resp = requests.request(
+                method=method,
+                url=url,
+                headers=headers,
+                timeout=timeout,
+                **kwargs,
+            )
+
+            # 附加完整的请求/响应用到 Allure
+            _attach_http_to_allure(resp)
+
+            # 挂到 item 上，供失败时打印
+            setattr(request.node, "_last_response", resp)
+
         return resp
 
     return _request
@@ -94,6 +174,10 @@ def auth_headers(api_headers: Dict[str, str], auth_token: str) -> Dict[str, str]
     return {**api_headers, "Authorization": f"Bearer {auth_token}"}
 
 
+# ═══════════════════════════════════════════════════════════════
+#  Allure 集成 — 失败时附加 HTTP dump
+# ═══════════════════════════════════════════════════════════════
+
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
 def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo):
     outcome = yield
@@ -105,5 +189,13 @@ def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo):
     if resp is None:
         return
 
-    report.sections.append(("HTTP response dump", _dump_response(resp)))
+    # 终端控制台输出
+    dump = _dump_response(resp)
+    report.sections.append(("HTTP response dump", dump))
 
+    # Allure 报告附件
+    allure.attach(
+        dump,
+        name="HTTP Debug Dump (Failure)",
+        attachment_type=allure.attachment_type.TEXT,
+    )

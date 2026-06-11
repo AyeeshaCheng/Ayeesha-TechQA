@@ -1,14 +1,18 @@
+"""Sauce Demo 登录页 | Swag Labs login page"""
+
+import allure
 from playwright.sync_api import Page, expect
 
+from pages.base_page import BasePage
 
-class LoginPage:
+
+class LoginPage(BasePage):
     """Sauce Demo 登录页 | Swag Labs login page"""
 
     PATH = "/"
 
-    # 初始化页面元素
     def __init__(self, page: Page, base_url: str) -> None:
-        self.page = page
+        super().__init__(page)
         self.base_url = base_url.rstrip("/")
         self.url = f"{self.base_url}{self.PATH}"
 
@@ -19,19 +23,23 @@ class LoginPage:
         self.login_button = page.locator('[data-test="login-button"]')
         self.error_message = page.locator('[data-test="error"]')
 
-    # 打开登录页
+    # ── 页面操作 ──────────────────────────────────────
+    @allure.step("打开登录页")
     def open(self) -> None:
         self.page.goto(self.url)
+        self.screenshot("login-page")
 
-    # 登录操作
+    @allure.step("执行登录: {username}")
     def login(self, username: str, password: str) -> None:
-        # Playwright 底层通过 CDP 协议和浏览器通信，每隔 50ms 循环查询 DOM，默认超时30秒
-        # Playwright Locator 惰性查询，动作方法自带智能等待 attached/visible，不用手写WebDriverWait
         self.username_input.fill(username)
+        self.screenshot(f"login-input-{username}")
         self.password_input.fill(password)
         self.login_button.click()
+        self.screenshot(f"login-submitted-{username}")
 
-    # 断言错误信息
+    # ── 断言 ──────────────────────────────────────────
+    @allure.step("验证错误信息包含: {text}")
     def expect_error_contains(self, text: str) -> None:
         expect(self.error_message).to_be_visible()
         expect(self.error_message).to_contain_text(text)
+        self.screenshot(f"error-{text[:20]}")

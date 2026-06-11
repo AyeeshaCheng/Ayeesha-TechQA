@@ -1,10 +1,18 @@
+"""登录功能测试 | Login functionality tests"""
+
+import allure
+import pytest
+
 from pages.inventory_page import InventoryPage
 from pages.login_page import LoginPage
 
 
+@allure.feature("用户登录")
 class TestLogin:
     """Sauce Demo 登录功能测试 | Login tests on Swag Labs"""
 
+    @allure.story("正常登录")
+    @allure.title("正确账号密码登录成功")
     def test_login_success(self, page, base_url, login_users):
         """正确账号密码登录成功 | Valid credentials redirect to inventory"""
         user = login_users["valid_user"]
@@ -15,6 +23,8 @@ class TestLogin:
         login_page.login(user["username"], user["password"])
         inventory_page.expect_loaded()
 
+    @allure.story("异常登录")
+    @allure.title("锁定账号无法登录")
     def test_login_locked_out_user(self, page, base_url, login_users):
         """锁定账号无法登录 | Locked out user shows error message"""
         user = login_users["locked_out_user"]
@@ -24,6 +34,8 @@ class TestLogin:
         login_page.login(user["username"], user["password"])
         login_page.expect_error_contains("locked out")
 
+    @allure.story("异常登录")
+    @allure.title("错误密码登录失败")
     def test_login_invalid_password(self, page, base_url, login_users):
         """错误密码登录失败 | Wrong password shows error message"""
         user = login_users["invalid_user"]
@@ -35,6 +47,8 @@ class TestLogin:
             "Username and password do not match"
         )
 
+    @allure.story("异常登录")
+    @allure.title("用户名为空时提示错误")
     def test_login_empty_username(self, page, base_url, login_users):
         """用户名为空 | Empty username shows required error"""
         user = login_users["valid_user"]
