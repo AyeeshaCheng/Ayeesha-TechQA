@@ -1,0 +1,15 @@
+services:
+  job-spy:
+    build:
+      context: .
+      platforms:
+        - linux/arm64
+    image: job-spy:latest
+    container_name: job-spy
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped

@@ -1,0 +1,10 @@
+node_modules
+.next
+.git
+.gitignore
+.env
+.env.example
+*.md
+!REQUIREMENTS.md
+npm-debug.log*
+pnpm-debug.log*
