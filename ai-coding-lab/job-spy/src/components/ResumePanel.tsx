@@ -420,7 +420,7 @@ export function ResumePanel({ resume, onResumeChange }: ResumePanelProps) {
           </p>
         )}
         {pdfDone && (
-          <p className="text-sm text-green-600 flex items-center gap-1">
+          <p className="text-sm text-success flex items-center gap-1">
             <CheckCircle className="h-3 w-3" />
             解析完成，已自动填充下方表单，可手动修改
           </p>
@@ -433,7 +433,7 @@ export function ResumePanel({ resume, onResumeChange }: ResumePanelProps) {
         <div className="border-t border-border/30" />
 
         {/* Row A: 姓名 / 电话 / 邮箱 */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <label className="text-xs text-muted-foreground">姓名</label>
             <Input
@@ -464,7 +464,7 @@ export function ResumePanel({ resume, onResumeChange }: ResumePanelProps) {
         </div>
 
         {/* Row B: 求职意向 / 工作经验年限 */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-muted-foreground">求职意向</label>
             <Input
@@ -487,7 +487,7 @@ export function ResumePanel({ resume, onResumeChange }: ResumePanelProps) {
         </div>
 
         {/* Row C: 期望薪资 / 期望城市 */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-muted-foreground">期望薪资</label>
             <Input

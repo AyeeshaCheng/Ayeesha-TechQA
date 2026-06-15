@@ -131,6 +131,12 @@ export function HistoryList({ onSelect, activeId, selectable, selectedIds = [], 
                     .filter((n): n is number => typeof n === "number");
                   if (scores.length > 0) return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
                 }
+                // Try DeepSeek nested score object: { score: { total: 95 } }
+                if (sm.score && typeof sm.score === "object" && typeof (sm.score as Record<string, unknown>).total === "number") {
+                  return (sm.score as Record<string, unknown>).total as number;
+                }
+                // Try score as top-level number
+                if (typeof sm.score === "number") return sm.score;
                 return null;
               } catch { return null; }
             }

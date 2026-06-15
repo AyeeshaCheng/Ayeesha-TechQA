@@ -105,7 +105,7 @@ export function ChatPanel({ context, matchResultId, onHighlightsReady }: ChatPan
           </Button>
         )}
         {conversationDone && (
-          <span className="text-xs text-green-600 dark:text-green-400">对话已完成</span>
+          <span className="text-xs text-success">对话已完成</span>
         )}
       </div>
 

@@ -160,7 +160,7 @@ export function JDInput({ value, onChange, onRun, isRunning, disabled }: JDInput
         )}
         {ocrDone && ocrText && (
           <div className="space-y-2">
-            <p className="text-sm text-green-600 flex items-center gap-1">
+            <p className="text-sm text-success flex items-center gap-1">
               <CheckCircle className="h-3 w-3" />
               识别完成，可在下方编辑后开始分析
             </p>
@@ -170,7 +170,7 @@ export function JDInput({ value, onChange, onRun, isRunning, disabled }: JDInput
                 setOcrText(e.target.value);
                 onChange(e.target.value);
               }}
-              className="min-h-[200px] resize-y font-mono text-sm border-green-200"
+              className="min-h-[200px] resize-y font-mono text-sm border-success/30"
               disabled={isRunning}
             />
           </div>
@@ -194,10 +194,10 @@ export function JDInput({ value, onChange, onRun, isRunning, disabled }: JDInput
         )}
 
         {/* Bottom action bar */}
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3">
           <span className="text-xs text-muted-foreground shrink-0">{value.length} 字符</span>
           {disabled && !isRunning && (
-            <span className="text-xs text-amber-600 flex-1 text-center">
+            <span className="text-xs text-warning flex-1 text-center">
               请先在"我的简历"中保存简历信息
             </span>
           )}
@@ -207,6 +207,7 @@ export function JDInput({ value, onChange, onRun, isRunning, disabled }: JDInput
               size="sm"
               onClick={() => onChange(SAMPLE_JD)}
               disabled={isRunning || ocrLoading}
+              className="text-xs h-8 sm:h-7"
             >
               填入示例文本
             </Button>
@@ -214,6 +215,7 @@ export function JDInput({ value, onChange, onRun, isRunning, disabled }: JDInput
               size="sm"
               onClick={onRun}
               disabled={disabled || isRunning || !value.trim()}
+              className="text-xs h-8 sm:h-7 min-h-[40px] sm:min-h-0"
             >
               {isRunning ? (
                 <>

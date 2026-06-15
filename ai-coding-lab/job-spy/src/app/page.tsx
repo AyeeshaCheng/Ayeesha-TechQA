@@ -14,7 +14,8 @@ import { HistoryList } from "@/components/HistoryList";
 import { Card, CardContent } from "@/components/ui/card";
 import { usePipeline, STEP_NAMES } from "@/hooks/usePipeline";
 import type { ResumeData, CareerStrategy } from "@/lib/schemas";
-import { Sparkles, RotateCcw, FileCheck, TrendingUp, Loader2, Play, Download } from "lucide-react";
+import { Sparkles, RotateCcw, FileCheck, TrendingUp, Loader2, Play, Download, Sun, Moon } from "lucide-react";
+import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import "react18-json-view/src/style.css";
 import "react18-json-view/src/dark.css";
@@ -28,6 +29,7 @@ export default function Home() {
   const [resume, setResume] = useState<ResumeData | null>(null);
   const [mode, setMode] = useState<AppMode>("resume");
   const { state, run, reset } = usePipeline();
+  const { theme, setTheme } = useTheme();
   const [jdRecordId, setJdRecordId] = useState<string | null>(null);
   const [matchResultId, setMatchResultId] = useState<string | null>(null);
 
@@ -259,13 +261,13 @@ export default function Home() {
     <main className="min-h-screen bg-background">
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-md">
-        <div className="mx-auto max-w-7xl px-6 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-                <Sparkles className="h-4 w-4 text-primary" />
+        <div className="mx-auto max-w-7xl px-3 sm:px-6 py-2.5 sm:py-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+              <div className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg bg-primary/10">
+                <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
               </div>
-              <h1 className="text-base font-bold tracking-tight">JobSpy</h1>
+              <h1 className="text-sm sm:text-base font-bold tracking-tight hidden sm:inline">JobSpy</h1>
             </div>
 
             {/* Mode switcher */}
@@ -274,7 +276,7 @@ export default function Home() {
                 onClick={() => { if (!isRunning) setMode("resume"); }}
                 disabled={isRunning}
                 className={cn(
-                  "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all",
+                  "flex items-center gap-1 sm:gap-1.5 rounded-md px-2 sm:px-3 py-1.5 text-xs font-medium transition-all",
                   mode === "resume"
                     ? "bg-background text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground",
@@ -282,26 +284,40 @@ export default function Home() {
                 )}
               >
                 <FileCheck className="h-3 w-3" />
-                JD定制简历
+                <span className="hidden sm:inline">JD定制简历</span>
+                <span className="sm:hidden">定制</span>
               </button>
               <button
                 onClick={() => setMode("strategy")}
                 className={cn(
-                  "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all",
+                  "flex items-center gap-1 sm:gap-1.5 rounded-md px-2 sm:px-3 py-1.5 text-xs font-medium transition-all",
                   mode === "strategy"
                     ? "bg-background text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 <TrendingUp className="h-3 w-3" />
-                求职策略
+                <span className="hidden sm:inline">求职策略</span>
+                <span className="sm:hidden">策略</span>
               </button>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1 sm:gap-3 shrink-0">
+              {/* Theme toggle */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 relative"
+                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                aria-label="切换主题"
+              >
+                <Sun className="h-3.5 w-3.5 rotate-0 scale-100 transition-all dark:rotate-90 dark:scale-0" />
+                <Moon className="absolute h-3.5 w-3.5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+              </Button>
               {!isIdle && mode === "resume" && (
                 <Button variant="ghost" size="sm" onClick={handleReset} className="h-7 text-xs">
-                  <RotateCcw className="h-3 w-3" /> 重置
+                  <RotateCcw className="h-3 w-3" />
+                  <span className="hidden sm:inline ml-1">重置</span>
                 </Button>
               )}
             </div>
@@ -309,16 +325,16 @@ export default function Home() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-7xl px-6 py-6">
+      <div className="mx-auto max-w-7xl px-3 sm:px-6 py-4 sm:py-6">
         {/* ── Mode 1: JD定制简历 ── */}
         {mode === "resume" && (
-          <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
+          <div className="grid gap-4 sm:gap-6 lg:grid-cols-[380px_1fr]">
             {/* Left Panel */}
-            <div className="space-y-4 lg:sticky lg:top-[60px] lg:self-start lg:max-h-[calc(100vh-84px)] lg:overflow-auto">
+            <div className="space-y-4 lg:sticky lg:top-[56px] lg:self-start lg:max-h-[calc(100vh-80px)] lg:overflow-auto">
               <Tabs defaultValue="jd">
                 <TabsList className="w-full">
-                  <TabsTrigger value="jd" className="flex-1">岗位描述</TabsTrigger>
-                  <TabsTrigger value="resume" className="flex-1">
+                  <TabsTrigger value="jd" className="flex-1 text-xs sm:text-sm">岗位描述</TabsTrigger>
+                  <TabsTrigger value="resume" className="flex-1 text-xs sm:text-sm">
                     我的简历
                     {noResume && <span className="ml-1.5 h-1.5 w-1.5 rounded-full bg-warning inline-block" />}
                   </TabsTrigger>
@@ -435,9 +451,9 @@ export default function Home() {
 
         {/* ── Mode 2: 求职策略 ── */}
         {mode === "strategy" && (
-          <div className="grid gap-6 lg:grid-cols-[340px_1fr]">
+          <div className="grid gap-4 sm:gap-6 lg:grid-cols-[340px_1fr]">
             {/* Left: History */}
-            <div className="lg:sticky lg:top-[60px] lg:self-start lg:max-h-[calc(100vh-84px)] lg:overflow-hidden flex flex-col">
+            <div className="lg:sticky lg:top-[56px] lg:self-start lg:max-h-[calc(100vh-80px)] lg:overflow-hidden flex flex-col">
               <div className="text-sm font-medium mb-3 flex items-center justify-between">
                 <span>历史 JD 记录</span>
                 <span className="text-xs text-muted-foreground">
@@ -515,16 +531,16 @@ export default function Home() {
       {/* ── History Detail Popup ── */}
       {(historyDetail || historyDetailLoading) && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-0 sm:p-4"
           onClick={() => { setHistoryDetail(null); setHistoryDetailLoading(false); }}
         >
           <div
-            className="bg-background rounded-xl shadow-2xl border border-border/50 w-full max-w-2xl max-h-[80vh] flex flex-col m-4"
+            className="bg-background sm:rounded-xl shadow-2xl border border-border/50 w-full h-full sm:max-w-2xl sm:max-h-[80vh] sm:h-auto flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-border/30">
-              <h2 className="text-sm font-semibold">
+            <div className="flex items-center justify-between p-3 sm:p-4 border-b border-border/30 shrink-0">
+              <h2 className="text-sm font-semibold truncate pr-2">
                 {historyDetail?.jd?.parsed_json ? (() => {
                   try {
                     const p = JSON.parse(historyDetail.jd.parsed_json);
@@ -535,14 +551,15 @@ export default function Home() {
               <Button
                 variant="ghost"
                 size="sm"
+                className="shrink-0"
                 onClick={() => { setHistoryDetail(null); setHistoryDetailLoading(false); }}
               >
                 ✕
               </Button>
             </div>
 
-            {/* Tab bar */}
-            <div className="flex border-b border-border/30 px-4 gap-1">
+            {/* Tab bar — scroll horizontally on mobile */}
+            <div className="flex border-b border-border/30 px-2 sm:px-4 gap-0.5 sm:gap-1 overflow-x-auto shrink-0">
               {[
                 { key: "jd", label: "JD解析" },
                 { key: "skills", label: "技能匹配" },
@@ -552,7 +569,7 @@ export default function Home() {
                 <button
                   key={tab.key}
                   onClick={() => setHistoryDetailTab(tab.key as any)}
-                  className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
+                  className={`px-2.5 sm:px-3 py-2.5 sm:py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${
                     historyDetailTab === tab.key
                       ? "border-primary text-primary"
                       : "border-transparent text-muted-foreground hover:text-foreground"
@@ -625,17 +642,17 @@ export default function Home() {
       {/* ── Optimize Resume Popup ── */}
       {showOptimizePopup && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-0 sm:p-4"
           onClick={() => setShowOptimizePopup(false)}
         >
           <div
-            className="bg-background rounded-xl shadow-2xl border border-border/50 w-full max-w-3xl max-h-[85vh] flex flex-col m-4"
+            className="bg-background sm:rounded-xl shadow-2xl border border-border/50 w-full h-full sm:max-w-3xl sm:max-h-[85vh] sm:h-auto flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-border/30">
+            <div className="flex items-center justify-between p-3 sm:p-4 border-b border-border/30 shrink-0">
               <h2 className="text-sm font-semibold flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-green-600" />
+                <Sparkles className="h-4 w-4 text-primary" />
                 优化后的简历
               </h2>
               <Button
@@ -648,16 +665,16 @@ export default function Home() {
             </div>
 
             {/* Body: Editable textarea */}
-            <div className="flex-1 overflow-auto p-4">
+            <div className="flex-1 overflow-auto p-3 sm:p-4">
               <textarea
-                className="w-full min-h-[400px] text-sm font-sans leading-relaxed p-4 border border-border/50 rounded-lg resize-y focus:outline-none focus:ring-2 focus:ring-primary/20 bg-background"
+                className="w-full h-full min-h-[300px] sm:min-h-[400px] text-sm font-sans leading-relaxed p-3 sm:p-4 border border-border/50 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 bg-background"
                 value={editableResumeText}
                 onChange={(e) => setEditableResumeText(e.target.value)}
               />
             </div>
 
             {/* Footer: Export button */}
-            <div className="flex items-center justify-end gap-2 p-4 border-t border-border/30">
+            <div className="flex items-center justify-end gap-2 p-3 sm:p-4 border-t border-border/30 shrink-0">
               <Button
                 variant="outline"
                 size="sm"
