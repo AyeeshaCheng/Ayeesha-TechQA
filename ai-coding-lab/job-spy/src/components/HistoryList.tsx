@@ -112,7 +112,26 @@ export function HistoryList({ onSelect, activeId, selectable, selectedIds = [], 
             if (record.latestMatch?.skill_match_json) {
               try {
                 const sm = JSON.parse(record.latestMatch.skill_match_json);
-                return sm.overallMatchScore;
+                // Try standard Zod schema: overallMatchScore (number 0-100)
+                if (typeof sm.overallMatchScore === "number") return sm.overallMatchScore;
+                // Try DeepSeek Chinese key: 整体匹配度 (could be number or label)
+                if (sm["整体匹配度"] !== undefined) {
+                  const v = sm["整体匹配度"];
+                  if (typeof v === "number") return v;
+                  if (typeof v === "string") {
+                    if (/^\d+%?$/.test(v)) return parseInt(v); // "85%" → 85
+                    const labels: Record<string, number> = { 高: 85, 强: 90, 较高: 75, 中等: 60, 中: 55, 一般: 45, 低: 30, 弱: 20 };
+                    if (labels[v]) return labels[v];
+                  }
+                }
+                // Try skill_match array: average score
+                if (Array.isArray(sm.skill_match)) {
+                  const scores = (sm.skill_match as Array<{ score?: number }>)
+                    .map((s) => s.score)
+                    .filter((n): n is number => typeof n === "number");
+                  if (scores.length > 0) return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+                }
+                return null;
               } catch { return null; }
             }
             return null;

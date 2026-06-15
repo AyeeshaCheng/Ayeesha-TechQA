@@ -1,0 +1,9 @@
+{
+  "name": "file-reader",
+  "version": "1.0.0",
+  "category": "Debug / Utility",
+  "description": "On-demand source code file reader with 3-tier strategy (light/fragment/full). Auto-strips comments, blank lines, unused imports to save tokens. Tracks read history across multi-turn debug sessions.",
+  "compat": [
+    "claude-code"
+  ]
+}

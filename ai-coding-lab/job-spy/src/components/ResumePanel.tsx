@@ -128,10 +128,27 @@ export function ResumePanel({ resume, onResumeChange }: ResumePanelProps) {
         lines.push(merged);
       }
 
-      const updated = { ...form };
+      // Split pipe-delimited summary lines (e.g. "5年工作经验 | 求职意向：测试工程师 | 期望薪资：16-20K")
+      // into separate lines so each field extractor can match its own segment
+      const processedLines: string[] = [];
+      for (const line of lines) {
+        if (line.includes("|") && /[：:]/.test(line)) {
+          const segments = line
+            .split("|")
+            .map((s) => s.trim())
+            .filter(Boolean);
+          processedLines.push(...segments);
+        } else {
+          processedLines.push(line);
+        }
+      }
+      // Reassign for all subsequent extraction
+      const pipeSplitLines = processedLines;
+
+      const updated = { ...DEFAULT_RESUME };
 
       // 1) Name: find first short line (2-10 chars, not dominated by digits)
-      for (const line of lines) {
+      for (const line of pipeSplitLines) {
         const cleaned = line.replace(/[\s|•·｜]/g, "").trim();
         if (cleaned.length >= 2 && cleaned.length <= 10 && !/\d{4,}/.test(cleaned)) {
           updated.name = cleaned;
@@ -155,7 +172,7 @@ export function ResumePanel({ resume, onResumeChange }: ResumePanelProps) {
       }
 
       // 4) Years of experience: "X年" pattern
-      for (const line of lines) {
+      for (const line of pipeSplitLines) {
         const yrMatch = line.match(/(\d{1,2})\s*年/);
         if (yrMatch) {
           updated.yearsOfExperience = parseInt(yrMatch[1]);
@@ -164,15 +181,17 @@ export function ResumePanel({ resume, onResumeChange }: ResumePanelProps) {
       }
 
       // 5) Job title: lines with 求职意向/意向岗位/应聘/期望职位
-      for (const line of lines) {
-        if (/求职意向|意向[岗职]|应聘[岗职]|期望[岗职位]|目标[岗职位]/.test(line)) {
-          updated.jobTitle = line.replace(/(求职意向|意向[岗职]|应聘[岗职]|期望[岗职位]|目标[岗职位])[：:\s]*/, "").trim();
-          break;
+      if (!updated.jobTitle) {
+        for (const line of pipeSplitLines) {
+          if (/求职意向|意向[岗职]|应聘[岗职]|期望[岗职位]|目标[岗职位]/.test(line)) {
+            updated.jobTitle = line.replace(/(求职意向|意向[岗职]|应聘[岗职]|期望[岗职位]|目标[岗职位])[：:\s]*/, "").trim();
+            break;
+          }
         }
       }
       // Fallback: use second short meaningful line as job title
       if (!updated.jobTitle) {
-        for (const line of lines) {
+        for (const line of pipeSplitLines) {
           const cleaned = line.replace(/[\s|•·｜]/g, "").trim();
           if (cleaned.length >= 3 && cleaned.length <= 20 && !/\d{4,}/.test(cleaned) && cleaned !== updated.name) {
             if (/工程师|经理|设计师|开发|测试|运营|产品|主管|总监|专员|助理|顾问/.test(cleaned)) {
@@ -184,25 +203,29 @@ export function ResumePanel({ resume, onResumeChange }: ResumePanelProps) {
       }
 
       // 6) Expected salary: lines with 薪资/薪酬/期望
-      for (const line of lines) {
-        if (/薪[资酬]|期望薪资|薪酬|月薪|年薪/.test(line)) {
-          updated.expectedSalary = line.replace(/(期望)?薪[资酬]?[：:\s]*/, "").replace(/月薪|年薪/, "").trim();
-          break;
+      if (!updated.expectedSalary) {
+        for (const line of pipeSplitLines) {
+          if (/薪[资酬]|期望薪资|薪酬|月薪|年薪/.test(line)) {
+            updated.expectedSalary = line.replace(/(期望)?薪[资酬]?[：:\s]*/, "").replace(/月薪|年薪/, "").trim();
+            break;
+          }
         }
       }
 
       // 7) Expected city: lines with 城市/地点/期望城市
-      for (const line of lines) {
-        if (/城[市]|地[点址]|期望城|工作地/.test(line)) {
-          updated.expectedCity = line.replace(/(期望)?(工作)?(城[市]|地[点址])[：:\s]*/, "").trim();
-          break;
+      if (!updated.expectedCity) {
+        for (const line of pipeSplitLines) {
+          if (/城[市]|地[点址]|期望城|工作地/.test(line)) {
+            updated.expectedCity = line.replace(/(期望)?(工作)?(城[市]|地[点址])[：:\s]*/, "").trim();
+            break;
+          }
         }
       }
 
       // 8) Skills: block after "技能" / "专业技能" label
       let skillsLines: string[] = [];
       let inSkills = false;
-      for (const line of lines) {
+      for (const line of pipeSplitLines) {
         if (/^(专业)?技能[：:\s]*$/.test(line) || /^技能标签/.test(line)) {
           inSkills = true;
           continue;
@@ -226,16 +249,60 @@ export function ResumePanel({ resume, onResumeChange }: ResumePanelProps) {
         }
       }
 
-      // 9) Personal advantage: "个人优势" / "自我评价" block
-      let advantageText = "";
+      // 9-14) Section-aware extraction: find all headers with strict matching,
+      // then extract content between adjacent headers (no fixed slice sizes).
+      // Strict rules prevent false matches like "5年工作经验" or "2、项目经验丰富":
+      //   - Entire trimmed line must match the section pattern (^...$)
+      //   - Line must be ≤ 15 chars (section headers are short)
+      //   - Line must NOT start with a digit/bullet (running text)
+      const SECTION_DEFS: { regex: RegExp; field: string }[] = [
+        { regex: /^(个人优势|自我评价|个人简介|个人总结|核心竞争力)[：:\s]*$/, field: "personalAdvantage" },
+        { regex: /^(项目[经经]历|项目经验|项目业绩)[：:\s]*$/, field: "projectExperience" },
+        { regex: /^(工作[经经]历|工作经验|任职经历|职业经历)[：:\s]*$/, field: "workExperience" },
+        { regex: /^(教育[经背]历|教育背景|学历|毕业院校)[：:\s]*$/, field: "education" },
+        { regex: /^(资格证[书明]|证书[奖]|所获证书|专业证书|认证)[：:\s]*$/, field: "certifications" },
+      ];
+
+      const sectionHeaders: { field: string; index: number }[] = [];
       for (let i = 0; i < lines.length; i++) {
-        if (/个人优势|自我评价|个人简介|个人总结|核心竞争力/.test(lines[i])) {
-          const block = lines.slice(i + 1, i + 8).join("\n");
-          if (block.length > 10) {
-            updated.personalAdvantage = block;
-            advantageText = block;
+        const trimmed = lines[i].trim();
+        if (trimmed.length > 15) continue;
+        if (/^[\d一二三四五六七八九十]+[、.．)\s]/.test(trimmed)) continue;
+        for (const def of SECTION_DEFS) {
+          if (def.regex.test(trimmed)) {
+            sectionHeaders.push({ field: def.field, index: i });
+            break;
           }
-          break;
+        }
+      }
+      sectionHeaders.sort((a, b) => a.index - b.index);
+
+      let advantageText = "";
+      for (let i = 0; i < sectionHeaders.length; i++) {
+        const current = sectionHeaders[i];
+        const nextIndex = i + 1 < sectionHeaders.length ? sectionHeaders[i + 1].index : lines.length;
+        const content = lines.slice(current.index + 1, nextIndex).join("\n").trim();
+        if (!content) continue;
+
+        switch (current.field) {
+          case "personalAdvantage":
+            if (content.length > 10) {
+              updated.personalAdvantage = content;
+              advantageText = content;
+            }
+            break;
+          case "projectExperience":
+            if (content.length > 10) updated.projectExperience = content;
+            break;
+          case "workExperience":
+            if (content.length > 10) updated.workExperience = content;
+            break;
+          case "education":
+            if (content.length > 5) updated.education = content;
+            break;
+          case "certifications":
+            if (content.length > 3) updated.certifications = content;
+            break;
         }
       }
 
@@ -266,7 +333,6 @@ export function ResumePanel({ resume, onResumeChange }: ResumePanelProps) {
         for (const kw of TECH_KEYWORDS) {
           const regex = new RegExp(kw.replace(/\\\\/g, "\\"), "i");
           if (regex.test(advantageText) && !updated.skills.some((s) => regex.test(s))) {
-            // Extract the matched keyword in proper case
             foundSkills.push(kw.replace(/\\\\/g, "").replace(/\\/g, ""));
           }
         }
@@ -275,44 +341,28 @@ export function ResumePanel({ resume, onResumeChange }: ResumePanelProps) {
         }
       }
 
-      // 11) Project experience: "项目经历" / "项目经验" block
-      for (let i = 0; i < lines.length; i++) {
-        if (/项目[经经]历|项目经验|项目业绩/.test(lines[i])) {
-          const block = lines.slice(i + 1, i + 20).join("\n");
-          if (block.length > 10) updated.projectExperience = block;
-          break;
+      // Company info: detect lines with company suffix + date range (sidebar work history),
+      // prepend them before the section-extracted workExperience content
+      const companyLines: string[] = [];
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (
+          /(?:公司|集团|企业|中心)/.test(trimmed) &&
+          /\d{4}[\.年]\d{1,2}\s*[-—~至到]\s*(\d{4}[\.年]\d{1,2}|至今)/.test(trimmed)
+        ) {
+          companyLines.push(trimmed);
         }
+      }
+      if (companyLines.length > 0) {
+        const prefix = companyLines.join("\n");
+        updated.workExperience = updated.workExperience
+          ? prefix + "\n" + updated.workExperience
+          : prefix;
       }
 
-      // 12) Work experience: "工作经历" / "工作经验" block
-      for (let i = 0; i < lines.length; i++) {
-        if (/工作[经经]历|工作经验|任职经历|职业经历/.test(lines[i])) {
-          const block = lines.slice(i + 1, i + 20).join("\n");
-          if (block.length > 10) updated.workExperience = block;
-          break;
-        }
-      }
       // Fallback: if workExperience still empty, fill with full text (user can edit)
       if (!updated.workExperience) {
         updated.workExperience = fullText.slice(0, 2000);
-      }
-
-      // 13) Education: "教育经历" / "教育背景" block
-      for (let i = 0; i < lines.length; i++) {
-        if (/教育[经背]历|教育背景|学历|毕业院校/.test(lines[i])) {
-          const block = lines.slice(i + 1, i + 8).join("\n");
-          if (block.length > 5) updated.education = block;
-          break;
-        }
-      }
-
-      // 14) Certifications: "资格证书" / "证书" block
-      for (let i = 0; i < lines.length; i++) {
-        if (/资格证[书明]|证书[奖]|所获证书|专业证书|认证/.test(lines[i])) {
-          const block = lines.slice(i + 1, i + 8).join("\n");
-          if (block.length > 3) updated.certifications = block;
-          break;
-        }
       }
 
       setForm(updated);

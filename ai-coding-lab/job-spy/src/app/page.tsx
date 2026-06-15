@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { JDInput } from "@/components/JDInput";
@@ -8,15 +9,17 @@ import { ResumePanel } from "@/components/ResumePanel";
 import { PipelineView } from "@/components/PipelineView";
 import { StepCard } from "@/components/StepCard";
 import { StrategyOutput } from "@/components/StrategyOutput";
-import { LearningPlanCard } from "@/components/LearningPlanCard";
 import { ChatPanel } from "@/components/ChatPanel";
-import { ExportButton } from "@/components/ExportButton";
 import { HistoryList } from "@/components/HistoryList";
 import { Card, CardContent } from "@/components/ui/card";
 import { usePipeline, STEP_NAMES } from "@/hooks/usePipeline";
 import type { ResumeData, CareerStrategy } from "@/lib/schemas";
-import { Sparkles, RotateCcw, FileCheck, TrendingUp, Loader2, Play } from "lucide-react";
+import { Sparkles, RotateCcw, FileCheck, TrendingUp, Loader2, Play, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
+import "react18-json-view/src/style.css";
+import "react18-json-view/src/dark.css";
+
+const JsonView = dynamic(() => import("react18-json-view"), { ssr: false });
 
 type AppMode = "resume" | "strategy";
 
@@ -38,16 +41,18 @@ export default function Home() {
   // Optimize resume state
   const [optimizedResumeText, setOptimizedResumeText] = useState<string | null>(null);
   const [optimizing, setOptimizing] = useState(false);
+  const [showOptimizePopup, setShowOptimizePopup] = useState(false);
+  const [editableResumeText, setEditableResumeText] = useState("");
 
   // History detail popup
   const [historyDetail, setHistoryDetail] = useState<any>(null);
   const [historyDetailLoading, setHistoryDetailLoading] = useState(false);
-  const [historyDetailTab, setHistoryDetailTab] = useState<"competitiveness" | "skills" | "strategy" | "resume">("competitiveness");
+  const [historyDetailTab, setHistoryDetailTab] = useState<"jd" | "skills" | "competitiveness" | "strategy">("jd");
 
   const handleHistoryDoubleClick = useCallback(async (recordId: string) => {
     setHistoryDetailLoading(true);
     setHistoryDetail(null);
-    setHistoryDetailTab("competitiveness");
+    setHistoryDetailTab("jd");
     try {
       const res = await fetch(`/api/history?id=${recordId}&type=detail`);
       if (!res.ok) return;
@@ -90,7 +95,7 @@ export default function Home() {
       });
     } catch { /* non-blocking */ }
 
-    run(jdText, resume, matchId);
+    run(jdText, resume, matchId, jdId);
   }, [jdText, resume, run]);
 
   const handleReset = useCallback(() => {
@@ -195,12 +200,54 @@ export default function Home() {
 
       const text = await res.text();
       setOptimizedResumeText(text);
+      setEditableResumeText(text);
+      setShowOptimizePopup(true);
     } catch (err) {
       setOptimizedResumeText(`优化失败: ${err instanceof Error ? err.message : "未知错误"}`);
     } finally {
       setOptimizing(false);
     }
   }, [resume, jdText, matchResultId]);
+
+  const [exportingPdf, setExportingPdf] = useState(false);
+
+  const handleExportPdf = useCallback(async () => {
+    const content = editableResumeText;
+    if (!content.trim()) return;
+
+    setExportingPdf(true);
+    try {
+      const res = await fetch("/api/export-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content,
+          matchResultId: matchResultId ?? undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "导出失败" }));
+        throw new Error((err as any).error || `HTTP ${res.status}`);
+      }
+
+      // Trigger browser download of the generated PDF
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "optimized-resume.pdf";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("PDF export error:", err);
+      alert(`PDF 导出失败: ${err instanceof Error ? err.message : "未知错误"}`);
+    } finally {
+      setExportingPdf(false);
+    }
+  }, [editableResumeText, matchResultId]);
 
   // ── Common state ──
   const noResume = !resume || !resume.name || resume.skills.length === 0;
@@ -306,7 +353,7 @@ export default function Home() {
                       上传或粘贴岗位描述，开始生成 JD 定制简历
                     </p>
                     <p className="mt-1.5 text-xs text-muted-foreground/50">
-                      JD解析 → 技能匹配 → 竞争力分析 → 学习计划 → 简历优化 → 导出PDF
+                      JD解析 → 技能匹配 → 竞争力分析 → 简历优化 → 导出PDF
                     </p>
                   </div>
                 </div>
@@ -340,11 +387,6 @@ export default function Home() {
                     />
                   )}
 
-                  {/* Learning Plan (Step 5 — from pipeline) */}
-                  {state.phase === "done" && (
-                    <LearningPlanSection data={state.outputs.learningPlan} />
-                  )}
-
                   {/* Chat Panel */}
                   {state.phase === "done" && resume && (
                     <Card className="border-border/50">
@@ -360,7 +402,7 @@ export default function Home() {
                     </Card>
                   )}
 
-                  {/* Optimize + Export */}
+                  {/* Optimize button */}
                   {state.phase === "done" && (
                     <div className="space-y-3">
                       <div className="flex items-center gap-3">
@@ -382,33 +424,7 @@ export default function Home() {
                             </>
                           )}
                         </Button>
-                        <ExportButton
-                          content={
-                            optimizedResumeText ||
-                            (Array.isArray(state.outputs.strategy?.resumeOptimization)
-                              ? state.outputs.strategy!.resumeOptimization!.map((r: any) => r.action + ": " + r.detail).join("\n")
-                              : "") ||
-                            ""
-                          }
-                          matchResultId={matchResultId ?? undefined}
-                          label="导出简历"
-                        />
                       </div>
-
-                      {/* Optimized resume result */}
-                      {optimizedResumeText && (
-                        <Card className="border-green-200" id="optimize-result">
-                          <CardContent className="p-4">
-                            <h3 className="text-sm font-semibold mb-2 flex items-center gap-1">
-                              <Sparkles className="h-3.5 w-3.5 text-green-600" />
-                              优化后的简历
-                            </h3>
-                            <pre className="text-sm whitespace-pre-wrap font-sans text-muted-foreground">
-                              {optimizedResumeText}
-                            </pre>
-                          </CardContent>
-                        </Card>
-                      )}
                     </div>
                   )}
                 </>
@@ -528,10 +544,10 @@ export default function Home() {
             {/* Tab bar */}
             <div className="flex border-b border-border/30 px-4 gap-1">
               {[
+                { key: "jd", label: "JD解析" },
+                { key: "skills", label: "技能匹配" },
                 { key: "competitiveness", label: "竞争力分析" },
-                { key: "skills", label: "技能缺口" },
                 { key: "strategy", label: "求职策略" },
-                { key: "resume", label: "优化简历" },
               ].map((tab) => (
                 <button
                   key={tab.key}
@@ -556,211 +572,117 @@ export default function Home() {
               ) : historyDetail?.matches?.[0] ? (
                 (() => {
                   const m = historyDetail.matches[0];
-                  return (
-                    <>
-                      {historyDetailTab === "competitiveness" && m.competitiveness_json && (
-                        <div className="text-sm whitespace-pre-wrap">
-                          {(() => {
-                            try {
-                              const c = JSON.parse(m.competitiveness_json);
-                              return (
-                                <div className="space-y-4">
-                                  <div>
-                                    <span className="font-semibold">竞争力等级：</span>
-                                    <span className={c.competitivenessLevel === "strong" ? "text-green-600" : c.competitivenessLevel === "moderate" ? "text-amber-600" : "text-red-600"}>
-                                      {c.competitivenessLevel === "strong" ? "强" : c.competitivenessLevel === "moderate" ? "中等" : "需提升"}
-                                    </span>
-                                  </div>
-                                  {c.strengths?.length > 0 && (
-                                    <div>
-                                      <h4 className="font-semibold mb-1">核心优势</h4>
-                                      <ul className="list-disc pl-5 space-y-1">
-                                        {c.strengths.map((s: any, i: number) => (
-                                          <li key={i}><span className="font-medium">{s.area}</span>：{s.detail}</li>
-                                        ))}
-                                      </ul>
-                                    </div>
-                                  )}
-                                  {c.gaps?.length > 0 && (
-                                    <div>
-                                      <h4 className="font-semibold mb-1">差距分析</h4>
-                                      <ul className="list-disc pl-5 space-y-1">
-                                        {c.gaps.map((g: any, i: number) => (
-                                          <li key={i}>
-                                            <span className="font-medium">{g.area}</span>
-                                            <span className={`ml-1 text-xs ${g.severity === "critical" ? "text-red-600" : g.severity === "moderate" ? "text-amber-600" : "text-muted-foreground"}`}>
-                                              [{g.severity === "critical" ? "关键" : g.severity === "moderate" ? "中等" : "次要"}]
-                                            </span>
-                                            ：{g.suggestion}
-                                          </li>
-                                        ))}
-                                      </ul>
-                                    </div>
-                                  )}
-                                  {c.salaryPositioning && (
-                                    <div>
-                                      <span className="font-semibold">薪资定位：</span>
-                                      {c.salaryPositioning.recommendedRange}（{c.salaryPositioning.justification}）
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            } catch { return <p className="text-muted-foreground">无法解析竞争力分析数据</p>; }
-                          })()}
-                        </div>
-                      )}
-                      {historyDetailTab === "competitiveness" && !m.competitiveness_json && (
-                        <p className="text-sm text-muted-foreground">暂无竞争力分析数据</p>
-                      )}
 
-                      {historyDetailTab === "skills" && m.skill_match_json && (
-                        <div className="text-sm whitespace-pre-wrap">
-                          {(() => {
-                            try {
-                              const sm = JSON.parse(m.skill_match_json);
-                              return (
-                                <div className="space-y-4">
-                                  <div>
-                                    <span className="font-semibold">整体匹配度：</span>
-                                    <span className="text-lg font-bold text-primary">{sm.overallMatchScore}%</span>
-                                  </div>
-                                  {sm.matchedSkills?.length > 0 && (
-                                    <div>
-                                      <h4 className="font-semibold text-green-600 mb-1">✅ 已匹配技能</h4>
-                                      <div className="flex flex-wrap gap-1">
-                                        {sm.matchedSkills.map((s: string, i: number) => (
-                                          <span key={i} className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded">{s}</span>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-                                  {sm.partialMatches?.length > 0 && (
-                                    <div>
-                                      <h4 className="font-semibold text-amber-600 mb-1">⚠️ 部分匹配</h4>
-                                      <ul className="space-y-1">
-                                        {sm.partialMatches.map((p: any, i: number) => (
-                                          <li key={i} className="text-xs">
-                                            JD要求 <span className="font-medium">{p.jdSkill}</span>
-                                            → 你有 <span className="font-medium">{p.userSkill}</span>
-                                            （{p.reason}）
-                                          </li>
-                                        ))}
-                                      </ul>
-                                    </div>
-                                  )}
-                                  {sm.missingSkills?.length > 0 && (
-                                    <div>
-                                      <h4 className="font-semibold text-red-600 mb-1">❌ 缺失技能</h4>
-                                      <div className="flex flex-wrap gap-1">
-                                        {sm.missingSkills.map((s: string, i: number) => (
-                                          <span key={i} className="text-xs bg-red-50 text-red-700 px-2 py-0.5 rounded">{s}</span>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-                                  {sm.extraSkills?.length > 0 && (
-                                    <div>
-                                      <h4 className="font-semibold text-blue-600 mb-1">💡 额外优势技能</h4>
-                                      <div className="flex flex-wrap gap-1">
-                                        {sm.extraSkills.map((s: string, i: number) => (
-                                          <span key={i} className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded">{s}</span>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            } catch { return <p className="text-muted-foreground">无法解析技能匹配数据</p>; }
-                          })()}
-                        </div>
-                      )}
-                      {historyDetailTab === "skills" && !m.skill_match_json && (
-                        <p className="text-sm text-muted-foreground">暂无技能匹配数据</p>
-                      )}
+                  // Resolve the JSON content for the active tab
+                  const resolveJson = (): Record<string, unknown> | null => {
+                    try {
+                      if (historyDetailTab === "jd" && historyDetail?.jd?.parsed_json) {
+                        return JSON.parse(historyDetail.jd.parsed_json);
+                      }
+                      if (historyDetailTab === "skills" && m.skill_match_json) {
+                        return JSON.parse(m.skill_match_json);
+                      }
+                      if (historyDetailTab === "competitiveness" && m.competitiveness_json) {
+                        return JSON.parse(m.competitiveness_json);
+                      }
+                      if (historyDetailTab === "strategy" && m.strategy_json) {
+                        return JSON.parse(m.strategy_json);
+                      }
+                    } catch { /* fall through */ }
+                    return null;
+                  };
 
-                      {historyDetailTab === "strategy" && m.strategy_json && (
-                        <div className="text-sm whitespace-pre-wrap">
-                          {(() => {
-                            try {
-                              const s = JSON.parse(m.strategy_json);
-                              return (
-                                <div className="space-y-4">
-                                  {s.resumeOptimization?.length > 0 && (
-                                    <div>
-                                      <h4 className="font-semibold mb-1">简历优化建议</h4>
-                                      <ul className="list-disc pl-5 space-y-1">
-                                        {s.resumeOptimization.map((r: any, i: number) => (
-                                          <li key={i}><span className="font-medium">{r.action}</span>：{r.detail}</li>
-                                        ))}
-                                      </ul>
-                                    </div>
-                                  )}
-                                  {s.interviewPrep && (
-                                    <div>
-                                      <h4 className="font-semibold mb-1">面试准备</h4>
-                                      {s.interviewPrep.technicalQuestions?.length > 0 && (
-                                        <div className="mb-2">
-                                          <span className="text-xs font-medium">技术问题：</span>
-                                          <ul className="list-disc pl-5">
-                                            {s.interviewPrep.technicalQuestions.map((q: string, i: number) => (
-                                              <li key={i} className="text-xs">{q}</li>
-                                            ))}
-                                          </ul>
-                                        </div>
-                                      )}
-                                      {s.interviewPrep.behavioralQuestions?.length > 0 && (
-                                        <div className="mb-2">
-                                          <span className="text-xs font-medium">行为问题：</span>
-                                          <ul className="list-disc pl-5">
-                                            {s.interviewPrep.behavioralQuestions.map((q: string, i: number) => (
-                                              <li key={i} className="text-xs">{q}</li>
-                                            ))}
-                                          </ul>
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
-                                  {s.skillDevelopmentPlan?.length > 0 && (
-                                    <div>
-                                      <h4 className="font-semibold mb-1">技能补强计划</h4>
-                                      <ul className="space-y-1">
-                                        {s.skillDevelopmentPlan.map((sd: any, i: number) => (
-                                          <li key={i} className="text-xs">
-                                            <span className="font-medium">{sd.skill}</span>
-                                            <span className={`ml-1 text-xs ${sd.priority === "high" ? "text-red-600" : sd.priority === "medium" ? "text-amber-600" : "text-muted-foreground"}`}>
-                                              [{sd.priority === "high" ? "高" : sd.priority === "medium" ? "中" : "低"}]
-                                            </span>
-                                            — {sd.resource}
-                                          </li>
-                                        ))}
-                                      </ul>
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            } catch { return <p className="text-muted-foreground">无法解析求职策略数据</p>; }
-                          })()}
-                        </div>
-                      )}
-                      {historyDetailTab === "strategy" && !m.strategy_json && (
-                        <p className="text-sm text-muted-foreground">暂无求职策略数据</p>
-                      )}
+                  const tabData = resolveJson();
 
-                      {historyDetailTab === "resume" && (
-                        <div className="text-sm">
-                          {m.optimized_resume_text ? (
-                            <pre className="whitespace-pre-wrap font-sans">{m.optimized_resume_text}</pre>
-                          ) : (
-                            <p className="text-muted-foreground">暂无优化后的简历文本。点击"优化简历"按钮生成。</p>
-                          )}
-                        </div>
-                      )}
-                    </>
+                  const tabLabel =
+                    historyDetailTab === "jd" ? "JD解析" :
+                    historyDetailTab === "skills" ? "技能匹配" :
+                    historyDetailTab === "competitiveness" ? "竞争力分析" : "求职策略";
+
+                  return tabData ? (
+                    <div className="text-sm">
+                      <JsonView
+                        src={tabData}
+                        theme="a11y"
+                        dark
+                        collapsed={false}
+                        enableClipboard={false}
+                        style={{ fontSize: "12px", background: "transparent" }}
+                      />
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">暂无{tabLabel}数据</p>
                   );
                 })()
               ) : (
                 <p className="text-sm text-muted-foreground">暂无分析记录</p>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Optimize Resume Popup ── */}
+      {showOptimizePopup && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          onClick={() => setShowOptimizePopup(false)}
+        >
+          <div
+            className="bg-background rounded-xl shadow-2xl border border-border/50 w-full max-w-3xl max-h-[85vh] flex flex-col m-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-border/30">
+              <h2 className="text-sm font-semibold flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-green-600" />
+                优化后的简历
+              </h2>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowOptimizePopup(false)}
+              >
+                ✕
+              </Button>
+            </div>
+
+            {/* Body: Editable textarea */}
+            <div className="flex-1 overflow-auto p-4">
+              <textarea
+                className="w-full min-h-[400px] text-sm font-sans leading-relaxed p-4 border border-border/50 rounded-lg resize-y focus:outline-none focus:ring-2 focus:ring-primary/20 bg-background"
+                value={editableResumeText}
+                onChange={(e) => setEditableResumeText(e.target.value)}
+              />
+            </div>
+
+            {/* Footer: Export button */}
+            <div className="flex items-center justify-end gap-2 p-4 border-t border-border/30">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowOptimizePopup(false)}
+              >
+                关闭
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleExportPdf}
+                disabled={!editableResumeText.trim() || exportingPdf}
+              >
+                {exportingPdf ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                    生成PDF中...
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-3.5 w-3.5 mr-1" />
+                    导出简历 (PDF)
+                  </>
+                )}
+              </Button>
             </div>
           </div>
         </div>
@@ -884,72 +806,3 @@ function CareerStrategyView({ data, partial }: { data: CareerStrategy | Partial<
 }
 
 // ── Learning Plan Section (receives data from pipeline) ──
-function LearningPlanSection({ data }: { data: any | null }) {
-  const [plan, setPlan] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  // Auto-display when pipeline data arrives — only accept valid data
-  useEffect(() => {
-    if (data && Array.isArray((data as any).phases) && (data as any).phases.length > 0) {
-      setPlan(data);
-    }
-  }, [data]);
-
-  const loadPlan = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      // Re-trigger via learning plan API if data not available
-      const res = await fetch("/api/chain/learning-plan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error((err as any).error || "生成失败");
-      }
-      const reader = res.body!.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let last: any = {};
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          try { last = JSON.parse(line); } catch { /* skip */ }
-        }
-      }
-      setPlan(last);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "生成失败");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  if (!plan && !loading && !error) {
-    return (
-      <Button variant="outline" size="sm" onClick={loadPlan}>
-        查看学习计划
-      </Button>
-    );
-  }
-
-  if (loading) return <Loader2 className="h-4 w-4 animate-spin" />;
-  if (error) return <p className="text-sm text-muted-foreground">{error}</p>;
-
-  return (
-    <Card className="border-border/50">
-      <CardContent className="p-4">
-        <h3 className="text-sm font-semibold mb-3">学习计划</h3>
-        <LearningPlanCard data={plan} />
-      </CardContent>
-    </Card>
-  );
-}

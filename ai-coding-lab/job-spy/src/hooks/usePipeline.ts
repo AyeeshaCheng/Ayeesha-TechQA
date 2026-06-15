@@ -6,7 +6,6 @@ import type {
   SkillMatch,
   CompetitivenessAnalysis,
   Strategy,
-  LearningPlan,
   StepStatus,
   StepDebug,
   PipelineOutputs,
@@ -21,23 +20,20 @@ import {
   COMPETITIVENESS_USER,
   STRATEGY_SYSTEM,
   STRATEGY_USER,
-  LEARNING_PLAN_SYSTEM,
-  LEARNING_PLAN_USER,
 } from '@/lib/prompts'
 
-export const STEP_NAMES = ['JD 解析', '技能匹配', '竞争力分析', '求职策略', '学习计划'] as const
+export const STEP_NAMES = ['JD 解析', '技能匹配', '竞争力分析', '求职策略'] as const
 
 export interface PipelineState {
   phase: 'idle' | 'running' | 'done' | 'error'
   currentStep: number
-  stepStatuses: [StepStatus, StepStatus, StepStatus, StepStatus, StepStatus]
+  stepStatuses: [StepStatus, StepStatus, StepStatus, StepStatus]
   outputs: PipelineOutputs
   partialOutputs: {
     parsedJD: Partial<ParsedJD> | null
     skillMatch: Partial<SkillMatch> | null
     competitiveness: Partial<CompetitivenessAnalysis> | null
     strategy: Partial<Strategy> | null
-    learningPlan: Partial<LearningPlan> | null
   }
   debug: (StepDebug | null)[]
   error: string | null
@@ -55,14 +51,14 @@ type Action =
 const initialState: PipelineState = {
   phase: 'idle',
   currentStep: -1,
-  stepStatuses: ['pending', 'pending', 'pending', 'pending', 'pending'],
-  outputs: { parsedJD: null, skillMatch: null, competitiveness: null, strategy: null, learningPlan: null },
-  partialOutputs: { parsedJD: null, skillMatch: null, competitiveness: null, strategy: null, learningPlan: null },
-  debug: [null, null, null, null, null],
+  stepStatuses: ['pending', 'pending', 'pending', 'pending'],
+  outputs: { parsedJD: null, skillMatch: null, competitiveness: null, strategy: null },
+  partialOutputs: { parsedJD: null, skillMatch: null, competitiveness: null, strategy: null },
+  debug: [null, null, null, null],
   error: null,
 }
 
-const outputKeys = ['parsedJD', 'skillMatch', 'competitiveness', 'strategy', 'learningPlan'] as const
+const outputKeys = ['parsedJD', 'skillMatch', 'competitiveness', 'strategy'] as const
 
 function reducer(state: PipelineState, action: Action): PipelineState {
   switch (action.type) {
@@ -86,7 +82,7 @@ function reducer(state: PipelineState, action: Action): PipelineState {
       const key = outputKeys[action.step]
       const debug = [...state.debug]
       debug[action.step] = action.debug
-      const isDone = action.step === 4
+      const isDone = action.step === 3
       return {
         ...state,
         phase: isDone ? 'done' : 'running',
@@ -99,7 +95,7 @@ function reducer(state: PipelineState, action: Action): PipelineState {
     case 'STEP_ERROR': {
       const statuses = [...state.stepStatuses] as PipelineState['stepStatuses']
       statuses[action.step] = 'error'
-      for (let i = action.step + 1; i < 5; i++) statuses[i] = 'skipped'
+      for (let i = action.step + 1; i < 4; i++) statuses[i] = 'skipped'
       return { ...state, phase: 'error', stepStatuses: statuses, error: action.error }
     }
     case 'STEP_WARN': {
@@ -184,21 +180,36 @@ export function usePipeline() {
   const [state, dispatch] = useReducer(reducer, initialState)
   const currentStepRef = useRef(0)
 
-  const run = useCallback(async (rawJD: string, resume: ResumeData, matchResultId?: string) => {
+  const run = useCallback(async (rawJD: string, resume: ResumeData, matchResultId?: string, jdRecordId?: string) => {
     dispatch({ type: 'START' });
 
-    // After each step, notify server to persist result to DB
+    // Persist each step's result to the database.
+    // Step 1 (parsed_json) → jd_records table; Steps 2-4 → match_results table.
     const persistStep = async (step: number, field: string, value: unknown) => {
-      if (!matchResultId) return;
       try {
-        await fetch("/api/match/save", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id: matchResultId,
-            [field]: JSON.stringify(value),
-          }),
-        });
+        if (step === 1) {
+          // Save parsed_json to the JD record (jd_records table)
+          if (!jdRecordId) return;
+          await fetch("/api/jd/save", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: jdRecordId,
+              parsed_json: JSON.stringify(value),
+            }),
+          });
+        } else {
+          // Save to match_results table (partial update)
+          if (!matchResultId) return;
+          await fetch("/api/match/save", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: matchResultId,
+              [field]: JSON.stringify(value),
+            }),
+          });
+        }
       } catch { /* non-blocking */ }
     };
 
@@ -282,35 +293,6 @@ export function usePipeline() {
           durationMs: Date.now() - t3,
         },
       });
-
-      // Step 5: Learning Plan (non-fatal — main analysis already done)
-      currentStepRef.current = 4;
-      dispatch({ type: 'STEP_RUNNING', step: 4 });
-      try {
-        const t4 = Date.now();
-        const learningPlan = await callStep<LearningPlan>(
-          '/api/chain/learning-plan',
-          { parsedJD, skillMatch, competitiveness, matchResultId },
-          (data) => dispatch({ type: 'STEP_PARTIAL', step: 4, data }),
-        );
-        persistStep(5, 'learning_plan_json', learningPlan);
-        dispatch({
-          type: 'STEP_COMPLETE', step: 4, data: learningPlan,
-          debug: {
-            systemPrompt: LEARNING_PLAN_SYSTEM,
-            userInput: LEARNING_PLAN_USER(JSON.stringify(parsedJD, null, 2), JSON.stringify(skillMatch, null, 2), JSON.stringify(competitiveness, null, 2)),
-            output: JSON.stringify(learningPlan, null, 2),
-            durationMs: Date.now() - t4,
-          },
-        });
-      } catch (lpErr) {
-        // Non-fatal: main analysis (steps 1-4) already complete
-        dispatch({
-          type: 'STEP_WARN',
-          step: 4,
-          error: `学习计划生成失败: ${lpErr instanceof Error ? lpErr.message : String(lpErr)}`,
-        });
-      }
     } catch (err) {
       dispatch({
         type: 'STEP_ERROR',

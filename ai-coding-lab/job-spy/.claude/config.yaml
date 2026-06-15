@@ -1,0 +1,24 @@
+# ============================================================
+# Job-Spy Claude 项目配置
+# ============================================================
+
+# --- 全局系统提示词 ---
+# 加载顺序：system_prompt.md → debug_rules.md
+# debug_rules.md 作为补充规则追加在 system_prompt 之后
+global_prompt:
+  main: "./global/system_prompt.md"
+  supplements:
+    - "./global/debug_rules.md"
+
+# --- Skill 注册 ---
+# 所有 skill 目录按需加载，仅在匹配场景时触发
+skills:
+  paths:
+    # 网页视觉设计：配色、布局、动效、原型
+    - "./skills/web-design-engineer/"
+    # Debug 按需文件读取：三级策略、裁剪输出、读历史追踪
+    - "./skills/file_reader/"
+
+# --- Skill 触发场景说明 ---
+# file_reader       → debug 时用户指定文件路径后触发（按需读取节约 token）
+# web-design-engineer → 网页配色/布局/视觉优化、原型/幻灯片/仪表盘制作

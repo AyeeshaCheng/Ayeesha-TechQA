@@ -38,6 +38,12 @@ export async function POST(req: NextRequest) {
     }, { status: 422 });
   }
 
+  // Strip page number artifacts from PDF text
+  text = text
+    .replace(/--?\s*\d+\s*(of|\/)\s*\d+\s*--?/gi, "")
+    .replace(/Page\s+\d+\s+of\s+\d+/gi, "")
+    .replace(/^\d+\s*$/gm, "");
+
   if (!text.trim()) {
     return Response.json({ error: "No text extracted from PDF. The file may be scanned/image-based." }, { status: 422 });
   }

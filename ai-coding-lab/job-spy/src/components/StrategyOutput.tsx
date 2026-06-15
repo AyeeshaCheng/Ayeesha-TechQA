@@ -26,7 +26,7 @@ const PRIORITY_COLORS = {
 }
 
 export function StrategyOutput({ strategy, isStreaming, debug }: StrategyOutputProps) {
-  const [showJson, setShowJson] = useState(false)
+  const [showJson, setShowJson] = useState(true)
   const [showDebug, setShowDebug] = useState(false)
 
   if (!strategy) return null

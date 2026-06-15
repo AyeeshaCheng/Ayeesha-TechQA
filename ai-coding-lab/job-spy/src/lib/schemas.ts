@@ -119,7 +119,6 @@ export interface PipelineOutputs {
   skillMatch: SkillMatch | null
   competitiveness: CompetitivenessAnalysis | null
   strategy: Strategy | null
-  learningPlan: LearningPlan | null
 }
 
 // ==================== Step 5: Learning Plan Output (NEW) ====================
