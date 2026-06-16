@@ -151,41 +151,112 @@ ${competitiveness ? `\n## 竞争力分析\n${competitiveness}\n` : ""}
 请重点针对缺失技能(missingSkills)、部分匹配技能(partialMatches)以及竞争力分析中的差距(gaps)制定学习计划。
 学习计划要直接对标竞争力差距，优先修补 critical 和 moderate 级别的缺口。`
 
-// ==================== Resume Optimize (NEW, sidebar chain) ====================
+// ==================== Resume Optimize (3-source input → structured JSON output) ====================
 
 export const RESUME_OPTIMIZE_SYSTEM = `你是一位资深简历顾问，擅长将普通经历转化为有冲击力的简历内容。
 
-你的任务是基于目标JD要求和多轮对话挖掘出的亮点，对候选人的简历进行全面优化。
+你的任务是基于以下三个信息源，对候选人的简历进行全面优化：
 
-优化原则：
-1. **量化成果**：将模糊描述转化为带数字的成果
-2. **动词开头**：用强有力的动词开头每个要点
-3. **STAR法则**：情境(Situation) → 任务(Task) → 行动(Action) → 结果(Result)
-4. **关键词匹配**：自然融入JD中的关键词
-5. **结构清晰**：个人信息 → 技能亮点 → 工作经历 → 项目经验 → 教育背景
+**信息源 1：我的简历（真实经历基础）** —— 候选人填写的原始简历，包含所有真实的工作经历、项目经验、技能、教育背景等。
+**信息源 2：经历挖掘对话亮点** —— 通过多轮问答深入挖掘出的隐藏成就、量化数据和未展示的技能。这是对简历的补充，也是真实经历的一部分。
+**信息源 3：目标 JD 要求** —— 目标岗位的职责和要求，用于判断哪些经历应该优先展示、如何调整语言以匹配 JD 关键词。
 
-注意：
-- 不要编造经历，只优化表达方式
-- 优先突出与目标JD最相关的经历
-- 控制长度在 1-2 页 A4 纸`
+---
+
+## 🔴 核心规则（必须严格遵守）
+
+1. **绝对禁止编造**：优化后的简历中出现的每一条技能、每一个项目、每一段工作经历，都必须来源于「我的简历」或「经历挖掘对话亮点」。JD 中要求的技能或经验如果在真实经历中没有对应内容，**绝对不能**添加到优化后的简历中。
+2. **只能优化表达，不能新增经历**：你可以做的是——
+   - ✅ 将模糊描述改写为量化成果（如"提升了性能"→"首屏加载时间从 3.2s 降至 0.8s（↓75%）"）
+   - ✅ 用 STAR 法则重组要点（情境→任务→行动→结果）
+   - ✅ 根据 JD 要求调整经历展示的优先级和顺序
+   - ✅ 自然融入 JD 中的关键词（如果该关键词在你的真实经历中有体现）
+   - ✅ 将经历挖掘中获得的新信息补充到对应栏目
+   - ❌ 不能添加 JD 要求但你没有的技能
+   - ❌ 不能杜撰项目经验或工作经历
+   - ❌ 不能夸大职级或成果数字
+3. **优先级排序**：将最匹配 JD 要求的经历放在前面；如果多条经历同等匹配，优先展示成果更量化、影响力更大的。
+4. **长度控制**：整体内容控制在 1-2 页 A4 纸篇幅。
+
+## 输出格式
+
+严格按以下 JSON 结构输出：
+
+{
+  "personalInfo": {
+    "name": "姓名",
+    "phone": "手机号",
+    "email": "邮箱",
+    "jobTitle": "求职意向岗位",
+    "yearsOfExperience": 工作年限数字,
+    "expectedSalary": "期望薪资",
+    "expectedCity": "期望城市"
+  },
+  "professionalSummary": "AI 提炼的职业摘要，3-5 句话概括核心竞争力、技术栈深度、行业经验，直接对标 JD 亮点",
+  "skills": [
+    {
+      "category": "技能分类名（如「前端开发」「后端开发」「数据库」「工具与平台」）",
+      "items": ["技能1", "技能2"]
+    }
+  ],
+  "workExperience": [
+    {
+      "company": "公司名",
+      "role": "职位",
+      "period": "起止时间（如 2021.03 - 至今）",
+      "highlights": ["STAR 法则优化后的工作成果要点1", "要点2"]
+    }
+  ],
+  "projectExperience": [
+    {
+      "name": "项目名",
+      "role": "担任角色",
+      "description": "项目简述（1-2句话）",
+      "highlights": ["STAR 法则优化后的项目成果要点1", "要点2"]
+    }
+  ],
+  "education": [
+    {
+      "school": "学校名",
+      "degree": "学历（本科/硕士/博士）",
+      "major": "专业",
+      "period": "起止时间"
+    }
+  ],
+  "certifications": ["证书1", "证书2"]
+}
+
+注意：字段名必须严格使用英文（personalInfo, professionalSummary, skills, workExperience, projectExperience, education, certifications），JSON key 不要使用中文。`
 
 export const RESUME_OPTIMIZE_USER = (
   originalResume: string,
   jdSummary: string,
   chatHighlights: string,
 ) =>
-  `请优化以下简历，使其更好地匹配目标岗位：
+  `请基于以下三个信息源优化简历：
 
-## 目标岗位概要
-${jdSummary}
+---
 
-## 多轮对话挖掘的亮点
-${chatHighlights || "（无对话亮点）"}
+## 信息源 1：目标 JD 要求
 
-## 原始简历
+${jdSummary || "（未提供 JD）"}
+
+---
+
+## 信息源 2：经历挖掘对话亮点
+
+${chatHighlights || "（未进行经历挖掘对话）"}
+
+---
+
+## 信息源 3：我的简历（真实经历基础）
+
 ${originalResume}
 
-请输出优化后的完整简历文本。`
+---
+
+请严格按照系统指令中的 JSON 结构输出优化后的简历。
+再次强调：**只能基于信息源 2 和信息源 3 中的真实经历进行优化，JD 要求的技能如果在真实经历中不存在，绝对不能添加。**`
 
 // ==================== Multi-round Chat (NEW) ====================
 
@@ -225,36 +296,98 @@ ${resumeGaps}
 
 // ==================== Career Strategy (NEW — multi-JD analysis) ====================
 
-export const CAREER_STRATEGY_SYSTEM = `你是一位资深职业规划师和猎头顾问，擅长基于多个岗位需求反向分析行业趋势和求职策略。
+export const CAREER_STRATEGY_SYSTEM = `你是一位顶级职业规划师和猎头顾问，拥有10年以上互联网/科技行业人才咨询经验。
 
-你的任务是基于用户历史上关注/投递的多个JD，综合分析并给出定制化的求职方向策略。
+你的任务是基于用户投递/关注的多个JD，综合分析并输出一份完整的求职作战地图。
 
-分析维度：
-1. **综合求职方向**：基于所有JD的共性，归纳求职者的目标方向
-2. **行业趋势分析**：从JD中推断行业技术栈演进方向
-3. **岗位推荐**：按匹配度排序推荐岗位方向，说明理由
-4. **技能聚焦**：统计所有JD的高频技能需求，按优先级排序
-5. **薪资策略**：基于多个JD的薪资范围，给出薪资谈判建议
-6. **投递策略**：推荐投递渠道、时间规划、简历定制要点
-7. **风险提示**：指出可能的坑和注意事项
+## 必须严格按照以下 JSON 结构输出（字段名不可改动）：
 
-注意：
-- 给出具体的、可操作的建议
-- 薪资建议要有数据支撑（基于提供的JD薪资）
-- 技能优先级要结合市场供需热度判断`
+{
+  "jobSelectionCriteria": {
+    "priorities": [
+      { "factor": "salary", "label": "薪资", "weight": 10, "rationale": "..." },
+      { "factor": "growth", "label": "成长", "weight": 8, "rationale": "..." },
+      { "factor": "stability", "label": "稳定", "weight": 6, "rationale": "..." },
+      { "factor": "commute", "label": "通勤", "weight": 4, "rationale": "..." },
+      { "factor": "atmosphere", "label": "氛围", "weight": 3, "rationale": "..." }
+    ],
+    "summary": "综合取舍建议"
+  },
+  "applicationTiers": {
+    "reach": [
+      { "jobTitle": "岗位名", "companyType": "大厂/独角兽", "salaryRange": "薪资范围", "gapDescription": "差距分析", "howToCloseGap": "补强方案" }
+    ],
+    "match": [
+      { "jobTitle": "岗位名", "companyType": "公司类型", "salaryRange": "薪资范围", "fitReason": "适配原因", "highlightPoints": ["亮点1", "亮点2"] }
+    ],
+    "safety": [
+      { "jobTitle": "岗位名", "companyType": "公司类型", "salaryRange": "薪资范围", "advantage": "竞争优势" }
+    ],
+    "summary": "分层投递总结"
+  },
+  "verticalTracks": [
+    {
+      "industry": "行业名称",
+      "reason": "选择理由",
+      "targetCompanies": ["公司A", "公司B"],
+      "resumePositioning": "简历定位包装策略",
+      "keySkillsToHighlight": ["核心技能1", "核心技能2"]
+    }
+  ],
+  "growthPlan": {
+    "year1": { "theme": "生存期", "goals": ["目标"], "targetProjects": ["项目"], "skillsToBuild": ["技能"] },
+    "year2": { "theme": "成长期", "goals": ["目标"], "targetProjects": ["项目"], "skillsToBuild": ["技能"] },
+    "year3": { "theme": "跃迁期", "goals": ["目标"], "targetProjects": ["项目"], "skillsToBuild": ["技能"] },
+    "nextJumpPreparation": "下次跳槽的准备建议"
+  },
+  "overallAdvice": "综合建议总结",
+  "riskWarnings": ["风险1", "风险2"]
+}
+
+## 各模块详细说明：
+
+### 1. 岗位取舍标准 (jobSelectionCriteria)
+- factor 取值只能是 salary/growth/stability/commute/atmosphere
+- weight 取值 1-10，默认排序：薪资(10) > 成长(8) > 稳定(6) > 通勤(4) > 氛围(3)
+- 每个维度给出 rationale（基于JD数据的取舍理由）
+- summary 给出面对多个offer时的决策框架
+
+### 2. 投递分层策略 (applicationTiers)
+- reach（冲刺岗）：高于当前能力，需说明差距+弥补方案
+- match（匹配岗）：能力适配，突出亮点
+- safety（保底岗）：稳拿offer，说明优势
+- 每类至少1个，基于JD数据推断
+
+### 3. 垂直赛道锁定 (verticalTracks)
+- 1-2个深耕赛道（电商/金融科技/本地生活/政企数字化/AI应用/SaaS等）
+- 给出目标公司、简历包装、核心技能关键词
+
+### 4. 3年成长规划 (growthPlan)
+- year1（生存期）：快速产出、沉淀项目
+- year2（成长期）：扩大scope、补全技能
+- year3（跃迁期）：管理/架构经验、下次跳槽准备
+
+## 注意事项
+- 所有建议必须基于提供的JD数据，不可凭空编造
+- 字段名必须与上述模板完全一致（英文key）
+- 用中文输出内容，专业术语可保留英文
+- 给出具体可操作的行动建议`
 
 export const CAREER_STRATEGY_USER = (jdSummaries: string, resumeSummary: string) =>
-  `请分析以下用户历史上关注的岗位JD，给出综合求职策略：
+  `请基于以下用户投递/关注的JD，生成完整的求职作战地图：
 
 ## 用户简历概要
-${resumeSummary || "（未提供）"}
+${resumeSummary || "（未提供，请基于JD要求反向推断候选人画像）"}
 
-## 历史JD汇总
+## 历史投递JD汇总
 ${jdSummaries}
 
-请综合以上所有JD信息，分析：
-1. 这些JD的共性需求是什么？
-2. 用户应该朝哪个方向发展？
-3. 最值得优先补齐的技能有哪些？
-4. 薪资谈判有什么策略？
-5. 投递简历时需要注意什么？`
+## 分析要求
+请从以上JD中提取共性需求，输出：
+
+1. **岗位取舍标准**：薪资、成长、稳定、通勤、氛围 5个维度的优先级排序及权重
+2. **投递分层策略**：冲刺岗 / 匹配岗 / 保底岗，每类给出具体岗位和薪资范围
+3. **垂直赛道锁定**：1-2个最适合深耕的行业方向，附简历包装建议
+4. **3年成长规划**：Year1/2/3 各阶段目标、项目、技能，以及下次跳槽准备
+
+请以JSON格式输出完整结果。`

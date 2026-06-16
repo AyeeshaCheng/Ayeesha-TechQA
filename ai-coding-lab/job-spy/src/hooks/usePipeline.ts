@@ -210,7 +210,9 @@ export function usePipeline() {
             }),
           });
         }
-      } catch { /* non-blocking */ }
+      } catch (err) {
+        console.error(`[persistStep] Failed to save step ${step} (${field}):`, err);
+      }
     };
 
     try {

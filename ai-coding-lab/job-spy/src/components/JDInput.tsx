@@ -44,11 +44,18 @@ const SAMPLE_JD = `高级前端工程师 — 字节跳动
 /** 去掉招聘平台图片末尾的推广文字 */
 function cleanJdText(text: string): string {
   return text
+    // Chinese: BOSS直聘 branding
     .replace(/扫码查看职位详情\s*/g, "")
     .replace(/找工作[，,]?\s*BOSS直聘直接谈[！!]\s*/g, "")
     .replace(/BOSS直聘\s*APP\s*扫码\s*/g, "")
     .replace(/打开\s*BOSS直聘\s*查看更多职位详情\s*/g, "")
     .replace(/—\s*BOSS直聘\s*$/gm, "")
+    // English: BOSS ZHIPIN branding from OCR
+    .replace(/BOSS\s*ZHIPIN\s*/gi, "")
+    .replace(/Boss\s*Zhipin\s*/g, "")
+    .replace(/zhipin\.com\s*/gi, "")
+    .replace(/^BOSS\s*$/gim, "")
+    // Cleanup extra whitespace
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }

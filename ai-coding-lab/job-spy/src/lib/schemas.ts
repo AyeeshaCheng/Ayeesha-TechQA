@@ -20,6 +20,46 @@ export const resumeSchema = z.object({
 
 export type ResumeData = z.infer<typeof resumeSchema>
 
+// ==================== Optimized Resume (AI output — structured JSON) ====================
+
+export const optimizedResumeSchema = z.object({
+  personalInfo: z.object({
+    name: z.string(),
+    phone: z.string(),
+    email: z.string(),
+    jobTitle: z.string(),
+    yearsOfExperience: z.number(),
+    expectedSalary: z.string(),
+    expectedCity: z.string(),
+  }).describe("个人信息"),
+  professionalSummary: z.string().describe("职业摘要：AI 提炼的核心竞争力概述，3-5句话"),
+  skills: z.array(z.object({
+    category: z.string().describe("技能分类，如「前端开发」「后端开发」「工具与平台」"),
+    items: z.array(z.string()),
+  })).describe("分类技能列表"),
+  workExperience: z.array(z.object({
+    company: z.string(),
+    role: z.string(),
+    period: z.string(),
+    highlights: z.array(z.string()).describe("STAR 法则优化后的工作成果要点"),
+  })).describe("工作经历"),
+  projectExperience: z.array(z.object({
+    name: z.string(),
+    role: z.string(),
+    description: z.string(),
+    highlights: z.array(z.string()).describe("STAR 法则优化后的项目成果要点"),
+  })).describe("项目经历"),
+  education: z.array(z.object({
+    school: z.string(),
+    degree: z.string(),
+    major: z.string(),
+    period: z.string(),
+  })).describe("教育背景"),
+  certifications: z.array(z.string()).describe("资格证书列表"),
+})
+
+export type OptimizedResume = z.infer<typeof optimizedResumeSchema>
+
 // ==================== Step 1: JD Parser Output ====================
 
 export const parsedJDSchema = z.object({
@@ -151,30 +191,76 @@ export const chatMessageSchema = z.object({
 // ==================== Career Strategy (NEW — from historical JDs) ====================
 
 export const careerStrategySchema = z.object({
-  overallDirection: z.string().describe("综合求职方向总览"),
-  industryAnalysis: z.string().describe("意向行业趋势分析"),
-  roleRecommendations: z.array(z.object({
-    role: z.string(),
-    fitScore: z.number().min(0).max(100),
+  /** 岗位取舍标准：按优先级排序 (薪资>成长>稳定>通勤>氛围) */
+  jobSelectionCriteria: z.object({
+    priorities: z.array(z.object({
+      factor: z.enum(["salary", "growth", "stability", "commute", "atmosphere"]),
+      label: z.string(),
+      weight: z.number().min(1).max(10),
+      rationale: z.string(),
+    })).describe("取舍优先级列表"),
+    summary: z.string().describe("综合取舍建议"),
+  }).describe("岗位取舍标准"),
+
+  /** 投递分层策略：冲刺岗/匹配岗/保底岗 */
+  applicationTiers: z.object({
+    reach: z.array(z.object({
+      jobTitle: z.string(),
+      companyType: z.string(),
+      salaryRange: z.string(),
+      gapDescription: z.string(),
+      howToCloseGap: z.string(),
+    })).describe("冲刺岗：高于当前能力水平的岗位"),
+    match: z.array(z.object({
+      jobTitle: z.string(),
+      companyType: z.string(),
+      salaryRange: z.string(),
+      fitReason: z.string(),
+      highlightPoints: z.array(z.string()),
+    })).describe("匹配岗：能力完全适配的岗位"),
+    safety: z.array(z.object({
+      jobTitle: z.string(),
+      companyType: z.string(),
+      salaryRange: z.string(),
+      advantage: z.string(),
+    })).describe("保底岗：稳拿offer的岗位"),
+    summary: z.string().describe("投递分层总结"),
+  }).describe("投递分层策略"),
+
+  /** 垂直赛道锁定：选定 1-2 个深耕行业 */
+  verticalTracks: z.array(z.object({
+    industry: z.string(),
     reason: z.string(),
-    keyRequirements: z.array(z.string()),
-  })).describe("推荐岗位及匹配度"),
-  skillFocusAreas: z.array(z.object({
-    skill: z.string(),
-    demandLevel: z.enum(["high", "medium", "emerging"]),
-    priority: z.enum(["urgent", "short_term", "long_term"]),
-    learningPath: z.string(),
-  })).describe("重点技能方向"),
-  salaryStrategy: z.object({
-    marketRange: z.string(),
-    negotiationTips: z.array(z.string()),
-    timingAdvice: z.string(),
-  }).describe("薪资策略"),
-  applicationStrategy: z.object({
-    recommendedChannels: z.array(z.string()),
-    resumeCustomizationTips: z.array(z.string()),
-    timeline: z.string(),
-  }).describe("投递策略"),
+    targetCompanies: z.array(z.string()),
+    resumePositioning: z.string(),
+    keySkillsToHighlight: z.array(z.string()),
+  })).describe("垂直赛道锁定：1-2个深耕行业及简历定向包装"),
+
+  /** 3年成长规划 */
+  growthPlan: z.object({
+    year1: z.object({
+      theme: z.string(),
+      goals: z.array(z.string()),
+      targetProjects: z.array(z.string()),
+      skillsToBuild: z.array(z.string()),
+    }).describe("第1年"),
+    year2: z.object({
+      theme: z.string(),
+      goals: z.array(z.string()),
+      targetProjects: z.array(z.string()),
+      skillsToBuild: z.array(z.string()),
+    }).describe("第2年"),
+    year3: z.object({
+      theme: z.string(),
+      goals: z.array(z.string()),
+      targetProjects: z.array(z.string()),
+      skillsToBuild: z.array(z.string()),
+    }).describe("第3年"),
+    nextJumpPreparation: z.string().describe("为下一次跳槽的准备工作"),
+  }).describe("3年成长规划"),
+
+  /** 综合建议 */
+  overallAdvice: z.string().describe("综合求职建议总结"),
   riskWarnings: z.array(z.string()).describe("风险提示和注意事项"),
 })
 

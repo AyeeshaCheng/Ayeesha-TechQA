@@ -39,12 +39,36 @@ function parseJDInfo(record: HistoryRecord): ParsedJDInfo {
   if (record.parsed_json) {
     try {
       const parsed = JSON.parse(record.parsed_json);
-      return {
-        jobTitle: parsed.jobTitle,
-        company: parsed.company,
-        location: parsed.location,
-        salaryRange: parsed.salaryRange,
-      };
+      // Handle 3 DeepSeek field name formats:
+      // 1. Schema-defined: jobTitle, company, location, salaryRange
+      // 2. Chinese: 岗位名称, 公司名称, 工作地点, 薪资范围
+      // 3. snake_case: job_title, company_name, location, salary
+      const jobTitle = parsed.jobTitle || parsed.岗位名称 || parsed.job_title || undefined;
+      const company = parsed.company || parsed.公司名称 || parsed.company_name || undefined;
+      const location = parsed.location || parsed.工作地点 || undefined;
+
+      // Salary can be { min, max, currency } or { min, max } or string
+      let salaryRange: ParsedJDInfo["salaryRange"] | undefined;
+      const rawSalary = parsed.salaryRange || parsed.薪资范围 || parsed.salary || undefined;
+      if (rawSalary) {
+        if (typeof rawSalary === "object" && rawSalary !== null) {
+          salaryRange = {
+            min: Number(rawSalary.min) || 0,
+            max: Number(rawSalary.max) || 0,
+            currency: rawSalary.currency || "CNY",
+          };
+        } else if (typeof rawSalary === "string") {
+          // Parse "15K-25K" or "15,000-25,000 CNY" format
+          const match = rawSalary.match(/([\d,.]+)\s*[-~–]\s*([\d,.]+)/);
+          if (match) {
+            const min = parseFloat(match[1].replace(/,/g, "")) * (rawSalary.includes("K") ? 1000 : 1);
+            const max = parseFloat(match[2].replace(/,/g, "")) * (rawSalary.includes("K") ? 1000 : 1);
+            salaryRange = { min, max, currency: "CNY" };
+          }
+        }
+      }
+
+      return { jobTitle, company, location, salaryRange };
     } catch { /* ignore */ }
   }
   return {};
@@ -137,6 +161,18 @@ export function HistoryList({ onSelect, activeId, selectable, selectedIds = [], 
                 }
                 // Try score as top-level number
                 if (typeof sm.score === "number") return sm.score;
+                // Try DeepSeek alternate keys: matchScore, final_score, total_score
+                if (typeof sm.matchScore === "number") return sm.matchScore;
+                if (typeof sm.final_score === "number") return sm.final_score;
+                if (typeof sm.total_score === "number") return sm.total_score;
+                // Try Chinese key 整体匹配度 as object: { score: 85, level: "高" }
+                if (sm["整体匹配度"] && typeof sm["整体匹配度"] === "object") {
+                  const cn = sm["整体匹配度"] as Record<string, unknown>;
+                  if (typeof cn.score === "number") return cn.score;
+                  if (typeof cn.percent === "number") return cn.percent;
+                }
+                // Try Chinese key 评分
+                if (typeof sm["评分"] === "number") return sm["评分"];
                 return null;
               } catch { return null; }
             }
