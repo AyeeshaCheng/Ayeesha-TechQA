@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { History, Trash2, FileText, Image, Loader2 } from "lucide-react";
+import { History, Trash2, FileText, Image, Loader2, Eye } from "lucide-react";
 
 interface ParsedJDInfo {
   jobTitle?: string;
@@ -136,43 +136,114 @@ export function HistoryList({ onSelect, activeId, selectable, selectedIds = [], 
             if (record.latestMatch?.skill_match_json) {
               try {
                 const sm = JSON.parse(record.latestMatch.skill_match_json);
-                // Try standard Zod schema: overallMatchScore (number 0-100)
+
+                // Helper: map Chinese evaluation label → numeric score (0-10 scale)
+                const evalToScore = (label: string): number | null => {
+                  const map: Record<string, number> = {
+                    "完全匹配": 10, "高度匹配": 10, "匹配": 8,
+                    "部分匹配": 5, "较高": 7.5, "中等": 5, "中": 5,
+                    "一般": 4, "较低": 2.5, "低": 2, "缺失": 0, "弱": 1,
+                  };
+                  // Also try prefix match
+                  for (const [k, v] of Object.entries(map)) {
+                    if (label.includes(k)) return v;
+                  }
+                  return null;
+                };
+
+                // (1) Standard Zod schema: overallMatchScore (number 0-100)
                 if (typeof sm.overallMatchScore === "number") return sm.overallMatchScore;
-                // Try DeepSeek Chinese key: 整体匹配度 (could be number or label)
+
+                // (2) DeepSeek: { matching_analysis: { required_skills: { name: { score: 10 } } } }
+                if (sm.matching_analysis && typeof sm.matching_analysis === "object") {
+                  const ma = sm.matching_analysis as Record<string, unknown>;
+                  const skillsObj = (ma.required_skills || ma.requiredSkills || {}) as Record<string, unknown>;
+                  const scores = Object.values(skillsObj)
+                    .map((v: unknown) => (v && typeof v === "object" ? (v as Record<string, unknown>).score : null))
+                    .filter((n): n is number => typeof n === "number");
+                  if (scores.length > 0) {
+                    const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+                    return Math.round(avg * 10); // 0-10 scale → 0-100
+                  }
+                }
+
+                // (3) DeepSeek Chinese: { 匹配项: { 必需技能: { name: { 评估: "完全匹配" } } } }
+                const matchItems = sm["匹配项"] || sm["匹配详情"];
+                if (matchItems && typeof matchItems === "object") {
+                  const mi = matchItems as Record<string, unknown>;
+                  // Collect all evaluations from 必需技能 + 加分技能
+                  const allEvals: string[] = [];
+                  for (const cat of ["必需技能", "加分技能", "required_skills", "preferred_skills"]) {
+                    const catObj = mi[cat];
+                    if (catObj && typeof catObj === "object") {
+                      for (const skillVal of Object.values(catObj as Record<string, unknown>)) {
+                        if (skillVal && typeof skillVal === "object") {
+                          const eval_ = (skillVal as Record<string, unknown>)["评估"] || (skillVal as Record<string, unknown>)["match"] || (skillVal as Record<string, unknown>)["匹配"];
+                          if (typeof eval_ === "string") allEvals.push(eval_);
+                        }
+                      }
+                    }
+                  }
+                  if (allEvals.length > 0) {
+                    const numeric = allEvals.map(evalToScore).filter((n): n is number => n !== null);
+                    if (numeric.length > 0) {
+                      const avg = numeric.reduce((a, b) => a + b, 0) / numeric.length;
+                      return Math.round(avg * 10); // 0-10 scale → 0-100
+                    }
+                  }
+                }
+
+                // (4) DeepSeek Chinese: { 评分: number | string | { score: number } }
+                if (sm["评分"] !== undefined) {
+                  const r = sm["评分"];
+                  if (typeof r === "number") return r;
+                  if (typeof r === "string" && /^\d+%?$/.test(r)) return parseInt(r);
+                  if (typeof r === "object" && r !== null && typeof (r as Record<string, unknown>).score === "number") {
+                    return (r as Record<string, unknown>).score as number;
+                  }
+                }
+
+                // (5) DeepSeek: { 总分说明: "总分: 85/100" }
+                if (typeof sm["总分说明"] === "string") {
+                  const m = (sm["总分说明"] as string).match(/(\d+)\s*\/\s*100/);
+                  if (m) return parseInt(m[1]);
+                }
+
+                // (6) Try Chinese key: 整体匹配度 (number or string label)
                 if (sm["整体匹配度"] !== undefined) {
                   const v = sm["整体匹配度"];
                   if (typeof v === "number") return v;
                   if (typeof v === "string") {
-                    if (/^\d+%?$/.test(v)) return parseInt(v); // "85%" → 85
+                    if (/^\d+%?$/.test(v)) return parseInt(v);
                     const labels: Record<string, number> = { 高: 85, 强: 90, 较高: 75, 中等: 60, 中: 55, 一般: 45, 低: 30, 弱: 20 };
                     if (labels[v]) return labels[v];
                   }
+                  if (typeof v === "object" && v !== null) {
+                    const cn = v as Record<string, unknown>;
+                    if (typeof cn.score === "number") return cn.score;
+                    if (typeof cn.percent === "number") return cn.percent;
+                  }
                 }
-                // Try skill_match array: average score
+
+                // (7) Try skill_match array: average score from { score } objects
                 if (Array.isArray(sm.skill_match)) {
                   const scores = (sm.skill_match as Array<{ score?: number }>)
                     .map((s) => s.score)
                     .filter((n): n is number => typeof n === "number");
                   if (scores.length > 0) return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
                 }
-                // Try DeepSeek nested score object: { score: { total: 95 } }
+
+                // (8) Try nested score object: { score: { total: 95 } }
                 if (sm.score && typeof sm.score === "object" && typeof (sm.score as Record<string, unknown>).total === "number") {
                   return (sm.score as Record<string, unknown>).total as number;
                 }
-                // Try score as top-level number
                 if (typeof sm.score === "number") return sm.score;
-                // Try DeepSeek alternate keys: matchScore, final_score, total_score
+
+                // (9) Try DeepSeek alternate keys: matchScore, final_score, total_score
                 if (typeof sm.matchScore === "number") return sm.matchScore;
                 if (typeof sm.final_score === "number") return sm.final_score;
                 if (typeof sm.total_score === "number") return sm.total_score;
-                // Try Chinese key 整体匹配度 as object: { score: 85, level: "高" }
-                if (sm["整体匹配度"] && typeof sm["整体匹配度"] === "object") {
-                  const cn = sm["整体匹配度"] as Record<string, unknown>;
-                  if (typeof cn.score === "number") return cn.score;
-                  if (typeof cn.percent === "number") return cn.percent;
-                }
-                // Try Chinese key 评分
-                if (typeof sm["评分"] === "number") return sm["评分"];
+
                 return null;
               } catch { return null; }
             }
@@ -234,6 +305,21 @@ export function HistoryList({ onSelect, activeId, selectable, selectedIds = [], 
                           </span>
                         )}
                       </Badge>
+                      {/* View image button — only for image-sourced JDs */}
+                      {record.source_type === "image" && (
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          className="h-5 w-5 text-muted-foreground hover:text-primary"
+                          title="查看JD图片"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(`/api/jd/image?id=${record.id}`, "_blank");
+                          }}
+                        >
+                          <Eye className="h-3 w-3" />
+                        </Button>
+                      )}
                       <span className="text-[10px] text-muted-foreground ml-auto">
                         {record.created_at?.slice(0, 10)}
                       </span>

@@ -46,8 +46,12 @@ export default function Home() {
   const [optimizing, setOptimizing] = useState(false);
   const [showOptimizePopup, setShowOptimizePopup] = useState(false);
   const [editableResumeText, setEditableResumeText] = useState("");
-  const [optimizePopupTab, setOptimizePopupTab] = useState<"preview" | "edit">("preview");
+  const [optimizePopupTab, setOptimizePopupTab] = useState<"preview" | "edit">("edit");
   const [chatHighlights, setChatHighlights] = useState<string | null>(null);
+  const [savingFinal, setSavingFinal] = useState(false);
+  const [finalSaved, setFinalSaved] = useState(false);
+  const [jdImagePath, setJdImagePath] = useState<string | null>(null);
+  const [jdSourceType, setJdSourceType] = useState<"text" | "image">("text");
 
   // History detail popup
   const [historyDetail, setHistoryDetail] = useState<any>(null);
@@ -84,7 +88,7 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id: jdId, raw_text: jdText, parsed_json: null,
-          source_image_path: null, source_type: "text",
+          source_image_path: jdImagePath, source_type: jdSourceType,
         }),
       });
       await fetch("/api/match/save", {
@@ -103,12 +107,14 @@ export default function Home() {
     }
 
     run(jdText, resume, matchId, jdId);
-  }, [jdText, resume, run]);
+  }, [jdText, resume, run, jdImagePath, jdSourceType]);
 
   const handleReset = useCallback(() => {
     reset();
     setJdRecordId(null);
     setMatchResultId(null);
+    setJdImagePath(null);
+    setJdSourceType("text");
   }, [reset]);
 
   // ── 求职策略: Generate Career Strategy ──
@@ -307,6 +313,117 @@ export default function Home() {
     }
   }, [editableResumeText, matchResultId, optimizedResumeJson, state.outputs.parsedJD]);
 
+  // ── Confirm (save final draft) ──
+  const handleConfirmFinal = useCallback(async () => {
+    // Parse current editable text as JSON and save to DB
+    let finalJson: OptimizedResume | null = null;
+    try {
+      finalJson = JSON.parse(editableResumeText);
+    } catch {
+      alert("当前编辑内容不是有效 JSON，请修正后再保存。");
+      return;
+    }
+    if (!matchResultId) return;
+
+    setSavingFinal(true);
+    try {
+      await fetch("/api/match/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: matchResultId,
+          optimized_resume_text: editableResumeText,
+        }),
+      });
+      setOptimizedResumeJson(finalJson);
+      setOptimizedResumeText(editableResumeText);
+      setFinalSaved(true);
+      setTimeout(() => setFinalSaved(false), 3000);
+    } catch (err) {
+      console.error("Failed to save final resume:", err);
+      alert("保存失败，请重试");
+    } finally {
+      setSavingFinal(false);
+    }
+  }, [editableResumeText, matchResultId]);
+
+  // ── Save + Export PDF ──
+  const handleSaveAndExport = useCallback(async () => {
+    // Step 1: parse current text as final JSON
+    let finalJson: OptimizedResume | null = null;
+    try {
+      finalJson = JSON.parse(editableResumeText);
+    } catch {
+      alert("当前编辑内容不是有效 JSON，请修正后再导出。");
+      return;
+    }
+    if (!finalJson) return;
+
+    // Step 2: save final draft to DB
+    setSavingFinal(true);
+    try {
+      await fetch("/api/match/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: matchResultId ?? undefined,
+          optimized_resume_text: editableResumeText,
+        }),
+      });
+      setOptimizedResumeJson(finalJson);
+      setOptimizedResumeText(editableResumeText);
+      setFinalSaved(true);
+    } catch (err) {
+      console.error("Failed to save final resume:", err);
+    }
+    setSavingFinal(false);
+
+    // Step 3: build filename
+    let filename = "optimized-resume.pdf";
+    try {
+      const jdParsed = state.outputs.parsedJD;
+      const jobTitle = jdParsed?.jobTitle || finalJson?.personalInfo?.jobTitle || "";
+      const company = jdParsed?.company || "";
+      const sr = jdParsed?.salaryRange;
+      let salaryPart = "";
+      if (sr && typeof sr === "object" && (sr.min || sr.max)) {
+        const min = Math.round((sr.min || 0) / 1000);
+        const max = Math.round((sr.max || 0) / 1000);
+        if (min && max) salaryPart = `${min}K-${max}K`;
+        else if (max) salaryPart = `${max}K`;
+      }
+      const parts = [jobTitle, company, salaryPart].filter(Boolean);
+      if (parts.length > 0) filename = parts.join("-") + ".pdf";
+    } catch { /* fallback */ }
+
+    // Step 4: export PDF
+    setExportingPdf(true);
+    try {
+      const body: Record<string, unknown> = { matchResultId: matchResultId ?? undefined };
+      body.resumeJson = finalJson;
+      const res = await fetch("/api/export-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("PDF export error:", err);
+      alert(`PDF 导出失败: ${err instanceof Error ? err.message : "未知错误"}`);
+    } finally {
+      setExportingPdf(false);
+    }
+  }, [editableResumeText, matchResultId, state.outputs.parsedJD]);
+
   // ── Common state ──
   const noResume = !resume || !resume.name || resume.skills.length === 0;
   const isRunning = state.phase === "running";
@@ -402,6 +519,7 @@ export default function Home() {
                     onRun={handleRun}
                     isRunning={isRunning}
                     disabled={noResume}
+                    onOcrComplete={({ imagePath }) => { setJdImagePath(imagePath); setJdSourceType("image"); }}
                   />
                   {noResume && (
                     <p className="mt-2 text-xs text-warning">请先填写并保存简历信息</p>
@@ -603,16 +721,29 @@ export default function Home() {
           >
             {/* Header */}
             <div className="flex items-center justify-between p-3 sm:p-4 border-b border-border/30 shrink-0">
-              <h2 className="text-sm font-semibold truncate pr-2">
-                {historyDetail?.jd?.parsed_json ? (() => {
-                  try {
-                    const p = JSON.parse(historyDetail.jd.parsed_json);
-                    const jobTitle = p.jobTitle || p.岗位名称 || p.job_title || "JD";
-                    const company = p.company || p.公司名称 || p.company_name || "";
-                    return `${jobTitle} ${company ? "· " + company : ""}`;
-                  } catch { return "历史分析详情"; }
-                })() : "历史分析详情"}
-              </h2>
+              <div className="flex items-center gap-2 min-w-0">
+                <h2 className="text-sm font-semibold truncate">
+                  {historyDetail?.jd?.parsed_json ? (() => {
+                    try {
+                      const p = JSON.parse(historyDetail.jd.parsed_json);
+                      const jobTitle = p.jobTitle || p.岗位名称 || p.job_title || "JD";
+                      const company = p.company || p.公司名称 || p.company_name || "";
+                      return `${jobTitle} ${company ? "· " + company : ""}`;
+                    } catch { return "历史分析详情"; }
+                  })() : "历史分析详情"}
+                </h2>
+                {historyDetail?.jd?.source_type === "image" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs shrink-0 gap-1"
+                    onClick={() => window.open(`/api/jd/image?id=${historyDetail.jd.id}`, "_blank")}
+                  >
+                    <Eye className="h-3 w-3" />
+                    查看JD图片
+                  </Button>
+                )}
+              </div>
               <Button
                 variant="ghost"
                 size="sm"
@@ -678,6 +809,16 @@ export default function Home() {
 
                     return (
                       <div className="space-y-4">
+                        {/* Final draft badge */}
+                        <div className="flex items-center justify-center gap-2">
+                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-success/10 text-success text-xs font-medium">
+                            <CheckCircle2 className="h-3 w-3" />
+                            简历终稿
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            可在「JD定制简历」中重新优化以更新
+                          </span>
+                        </div>
                         <ResumePreview data={optimizedData} />
                         {/* Download PDF button */}
                         <div className="flex justify-center pt-2 border-t border-border/30">
@@ -857,12 +998,14 @@ export default function Home() {
               )}
             </div>
 
-            {/* Footer: Export button */}
+            {/* Footer */}
             <div className="flex items-center justify-between p-3 sm:p-4 border-t border-border/30 shrink-0">
               <p className="text-xs text-muted-foreground">
-                {optimizePopupTab === "preview"
-                  ? "切换到「编辑」tab 可手动修改内容"
-                  : "编辑 JSON 后切换回「预览」tab 查看效果"}
+                {finalSaved
+                  ? "✅ 简历终稿已保存"
+                  : optimizePopupTab === "preview"
+                    ? "切换到「编辑」tab 可手动修改内容"
+                    : "请在「编辑」tab 检查并修改 AI 优化结果，修改后可切到「预览」查看效果"}
               </p>
               <div className="flex items-center gap-2">
                 <Button
@@ -873,9 +1016,27 @@ export default function Home() {
                   关闭
                 </Button>
                 <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleConfirmFinal}
+                  disabled={!editableResumeText.trim() || savingFinal}
+                >
+                  {savingFinal ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                      保存中...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                      {finalSaved ? "已确认终稿" : "确定终稿"}
+                    </>
+                  )}
+                </Button>
+                <Button
                   variant="default"
                   size="sm"
-                  onClick={handleExportPdf}
+                  onClick={handleSaveAndExport}
                   disabled={(!optimizedResumeJson && !editableResumeText.trim()) || exportingPdf}
                 >
                   {exportingPdf ? (
@@ -886,7 +1047,7 @@ export default function Home() {
                   ) : (
                     <>
                       <Download className="h-3.5 w-3.5 mr-1" />
-                      导出简历 (PDF)
+                      保存并导出PDF
                     </>
                   )}
                 </Button>

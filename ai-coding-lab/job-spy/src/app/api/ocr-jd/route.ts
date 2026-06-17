@@ -1,5 +1,9 @@
 import { generateText } from "ai";
 import { getVisionModel } from "@/lib/model";
+import { getDataDir } from "@/lib/db";
+import { randomUUID } from "crypto";
+import path from "path";
+import fs from "fs";
 
 export async function POST(req: Request) {
   let imageBase64: string;
@@ -12,6 +16,27 @@ export async function POST(req: Request) {
 
   if (!imageBase64 || !imageBase64.startsWith("data:")) {
     return Response.json({ error: "图片格式无效，需要 base64 data URI。" }, { status: 400 });
+  }
+
+  // Save the image to disk so we can show it later in history
+  let savedImagePath: string | null = null;
+  try {
+    const dataDir = getDataDir(); // always absolute
+    const imagesDir = path.join(dataDir, "jd-images");
+    fs.mkdirSync(imagesDir, { recursive: true });
+
+    // Extract MIME type and base64 data
+    const mimeMatch = imageBase64.match(/^data:(image\/\w+);base64,/);
+    const ext = mimeMatch ? mimeMatch[1].split("/")[1] : "png";
+    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+
+    const filename = `jd-${randomUUID().slice(0, 8)}.${ext}`;
+    const filePath = path.join(imagesDir, filename);
+    fs.writeFileSync(filePath, Buffer.from(base64Data, "base64"));
+    savedImagePath = filePath;
+  } catch (err) {
+    console.error("Failed to save JD image:", err);
+    // Don't fail the whole request — OCR can still proceed
   }
 
   try {
@@ -31,7 +56,7 @@ export async function POST(req: Request) {
       ],
     });
 
-    return Response.json({ jdText: result.text });
+    return Response.json({ jdText: result.text, imagePath: savedImagePath });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("OCR error:", msg);

@@ -3,7 +3,7 @@ import { randomUUID } from "crypto";
 import path from "path";
 import fs from "fs";
 
-// ── HTML escape helper ──
+// HTML escape helper
 function esc(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -12,15 +12,15 @@ function esc(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-// ── Render a single highlight bullet ──
+// Render a single highlight bullet
 function renderHighlight(h: string): string {
   return `<li>${esc(h)}</li>`;
 }
 
-// ── Photo path (relative to project root) ──
+// Photo path (relative to project root)
 const PHOTO_PATH = path.join(process.cwd(), "public", "photo.jpg");
 
-// ── Build the full resume HTML from JSON ──
+// Build the full resume HTML from JSON
 function buildResumeHtml(json: Record<string, unknown>, photoBase64?: string): string {
   const photoSrc = photoBase64 ? `data:image/jpeg;base64,${photoBase64}` : "";
   const pi = (json.personalInfo || {}) as Record<string, unknown>;
@@ -75,26 +75,28 @@ function buildResumeHtml(json: Record<string, unknown>, photoBase64?: string): s
 <meta charset="UTF-8">
 <title>${name} - 个人简历</title>
 <style>
-  @page { size: A4; margin: 1.8cm 2cm 1.8cm 2cm; }
+  @page { size: A4; margin: 2cm 2.2cm 2cm 2.2cm; }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   body {
     font-family: "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", sans-serif;
-    font-size: 11pt;
-    line-height: 1.7;
+    font-size: 10.5pt;
+    line-height: 1.6;
     color: #1a1a1a;
     max-width: 100%;
+    widows: 2;
+    orphans: 2;
   }
 
-  /* ── Header ── */
+  /* Header */
   .header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 18px;
-    padding-bottom: 16px;
-    border-bottom: 2px solid #1a56db;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1.5px solid #1a56db;
     gap: 20px;
   }
   .header-left {
@@ -102,72 +104,72 @@ function buildResumeHtml(json: Record<string, unknown>, photoBase64?: string): s
     text-align: left;
   }
   .header .name {
-    font-size: 22pt;
+    font-size: 20pt;
     font-weight: 700;
     color: #111;
-    letter-spacing: 2px;
-    margin-bottom: 6px;
+    letter-spacing: 1.5px;
+    margin-bottom: 4px;
   }
   .header .contact {
-    font-size: 10pt;
+    font-size: 9pt;
     color: #555;
     display: flex;
     flex-wrap: wrap;
-    gap: 4px 18px;
+    gap: 3px 14px;
   }
   .header .contact span { white-space: nowrap; }
   .header .meta {
-    font-size: 10pt;
+    font-size: 9pt;
     color: #777;
-    margin-top: 4px;
+    margin-top: 3px;
     display: flex;
     flex-wrap: wrap;
-    gap: 4px 18px;
+    gap: 3px 14px;
   }
   .header-photo {
-    width: 90px;
-    height: 120px;
+    width: 85px;
+    height: 113px;
     object-fit: cover;
     border-radius: 4px;
     border: 1px solid #d0d7e8;
     flex-shrink: 0;
   }
 
-  /* ── Sections ── */
+  /* Sections */
   .section {
-    margin-top: 18px;
+    margin-top: 14px;
   }
   .section-title {
-    font-size: 13pt;
+    font-size: 12pt;
     font-weight: 700;
     color: #1a56db;
-    border-bottom: 1px solid #d0d7e8;
-    padding-bottom: 4px;
-    margin-bottom: 10px;
-    letter-spacing: 1px;
+    border-bottom: 0.8px solid #d0d7e8;
+    padding-bottom: 3px;
+    margin-bottom: 6px;
+    letter-spacing: 0.8px;
   }
 
-  /* ── Professional Summary ── */
+  /* Professional Summary */
   .summary {
     background: #f4f6fb;
-    border-left: 3px solid #1a56db;
-    padding: 10px 14px;
-    border-radius: 3px;
-    font-size: 10.5pt;
-    line-height: 1.75;
+    border-left: 2.5px solid #1a56db;
+    padding: 8px 12px;
+    border-radius: 2px;
+    font-size: 9.5pt;
+    line-height: 1.65;
     color: #333;
   }
 
-  /* ── Skills ── */
+  /* Skills */
   .skill-group {
-    margin-bottom: 8px;
+    margin-bottom: 5px;
   }
   .skill-cat {
     font-weight: 600;
-    font-size: 10.5pt;
+    font-size: 9.5pt;
     color: #333;
     display: inline-block;
-    min-width: 90px;
+    min-width: 85px;
   }
   .skill-tags {
     display: inline;
@@ -176,34 +178,35 @@ function buildResumeHtml(json: Record<string, unknown>, photoBase64?: string): s
     display: inline-block;
     background: #e8edf5;
     color: #2c3e6b;
-    font-size: 9.5pt;
-    padding: 1px 8px;
+    font-size: 9pt;
+    padding: 2px 8px;
     border-radius: 2px;
     margin: 2px 4px 2px 0;
   }
 
-  /* ── Experience items ── */
+  /* Experience items */
   .exp-item {
-    margin-bottom: 14px;
+    margin-bottom: 10px;
   }
   .exp-header {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    margin-bottom: 4px;
+    margin-bottom: 3px;
   }
   .exp-company {
     font-weight: 700;
-    font-size: 11pt;
+    font-size: 10.5pt;
     color: #111;
   }
   .exp-role {
     font-weight: 500;
     color: #444;
     margin-left: 8px;
+    font-size: 9.5pt;
   }
   .exp-period {
-    font-size: 10pt;
+    font-size: 9pt;
     color: #888;
     white-space: nowrap;
   }
@@ -213,73 +216,79 @@ function buildResumeHtml(json: Record<string, unknown>, photoBase64?: string): s
   }
   .exp-highlights li {
     position: relative;
-    padding-left: 16px;
-    margin-bottom: 3px;
-    font-size: 10.5pt;
-    line-height: 1.65;
+    padding-left: 14px;
+    margin-bottom: 2px;
+    font-size: 9.5pt;
+    line-height: 1.55;
     color: #333;
   }
   .exp-highlights li::before {
-    content: "▸";
+    content: "\\25B8";
     position: absolute;
     left: 0;
     color: #1a56db;
-    font-size: 9pt;
+    font-size: 8pt;
   }
 
-  /* ── Project items ── */
+  /* Project items */
   .proj-item {
-    margin-bottom: 12px;
+    margin-bottom: 10px;
     padding: 8px 12px;
     background: #fafbfd;
-    border-radius: 4px;
+    border-radius: 3px;
     border: 1px solid #e8ecf2;
   }
   .proj-name {
     font-weight: 700;
-    font-size: 11pt;
+    font-size: 10.5pt;
     color: #1a56db;
   }
   .proj-role {
-    font-size: 10pt;
+    font-size: 9pt;
     color: #666;
     margin-left: 8px;
   }
   .proj-desc {
-    font-size: 10pt;
+    font-size: 9pt;
     color: #555;
-    margin: 4px 0;
+    margin: 3px 0;
   }
 
-  /* ── Education ── */
+  /* Education */
   .edu-item {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    margin-bottom: 5px;
-    font-size: 10.5pt;
+    margin-bottom: 3px;
+    font-size: 9.5pt;
   }
   .edu-school { font-weight: 600; color: #111; }
-  .edu-degree { color: #555; margin-left: 8px; }
-  .edu-period { font-size: 10pt; color: #888; white-space: nowrap; }
+  .edu-degree { color: #555; margin-left: 8px; font-size: 9pt; }
+  .edu-period { font-size: 9pt; color: #888; white-space: nowrap; }
 
-  /* ── Certifications ── */
+  /* Certifications */
   .cert-list {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 5px;
   }
   .cert-tag {
     background: #f0f4e8;
     color: #4a5c2e;
-    font-size: 9.5pt;
+    font-size: 9pt;
     padding: 2px 10px;
-    border-radius: 3px;
-    border: 1px solid #d8e2c8;
+    border-radius: 2px;
+    border: 0.8px solid #d8e2c8;
   }
 
-  /* ── Utility ── */
-  .text-muted { color: #999; font-size: 10pt; font-style: italic; }
+  /* Utility */
+  .text-muted { color: #999; font-size: 9pt; font-style: italic; }
+
+  /* Page break control — sections flow naturally, items stay together */
+  .section { break-inside: auto; page-break-inside: auto; }
+  .section-title { break-after: avoid; page-break-after: avoid; }
+  .exp-item, .proj-item { break-inside: avoid; page-break-inside: avoid; }
+  .proj-item:first-of-type { break-before: auto; page-break-before: auto; }
 </style>
 </head>
 <body>
@@ -381,22 +390,79 @@ ${certs.length > 0 ? `
 </html>`;
 }
 
-// ── Browser launcher ──
+// Browser launcher — cross-platform: Docker (Alpine/Debian), Windows, macOS
 async function getBrowser() {
   const puppeteer = (await import("puppeteer-core")).default;
+  const sandboxArgs = ["--no-sandbox", "--disable-setuid-sandbox"];
+
+  // 1. Explicit environment variable (set in Dockerfile / docker-compose)
+  const envPath = process.env.PUPPETEER_EXECUTABLE_PATH;
+  if (envPath && fs.existsSync(envPath)) {
+    return await puppeteer.launch({
+      headless: true,
+      executablePath: envPath,
+      args: sandboxArgs,
+    });
+  }
+
+  // 2. Alpine Linux (Docker): /usr/bin/chromium-browser
+  if (fs.existsSync("/usr/bin/chromium-browser")) {
+    return await puppeteer.launch({
+      headless: true,
+      executablePath: "/usr/bin/chromium-browser",
+      args: sandboxArgs,
+    });
+  }
+
+  // 3. Debian/Ubuntu Linux (alternative Docker base or bare-metal)
+  const debianPaths = [
+    "/usr/bin/google-chrome-stable",
+    "/usr/bin/google-chrome",
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+  ];
+  for (const p of debianPaths) {
+    if (fs.existsSync(p)) {
+      return await puppeteer.launch({
+        headless: true,
+        executablePath: p,
+        args: sandboxArgs,
+      });
+    }
+  }
+
+  // 4. Windows: Microsoft Edge
   const edgePaths = [
     "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
     "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
   ];
   for (const ep of edgePaths) {
     if (fs.existsSync(ep)) {
-      return await puppeteer.launch({ headless: true, executablePath: ep });
+      return await puppeteer.launch({
+        headless: true,
+        executablePath: ep,
+        args: sandboxArgs,
+      });
     }
   }
-  throw new Error("Microsoft Edge not found. PDF generation requires a Chromium-based browser.");
+
+  // 5. macOS: Google Chrome
+  const macPath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+  if (fs.existsSync(macPath)) {
+    return await puppeteer.launch({
+      headless: true,
+      executablePath: macPath,
+      args: sandboxArgs,
+    });
+  }
+
+  throw new Error(
+    "No Chromium-based browser found. Set PUPPETEER_EXECUTABLE_PATH to the browser binary, " +
+    "or install chromium/google-chrome. PDF generation requires a Chromium-based browser."
+  );
 }
 
-// ── POST handler ──
+// POST handler
 export async function POST(req: Request) {
   initDb();
 
@@ -444,10 +510,11 @@ export async function POST(req: Request) {
     browser = await getBrowser();
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: "load", timeout: 15000 });
+    // Use 0 margins — CSS @page rule handles all margin control
     const pdfBuffer = await page.pdf({
       format: "A4",
       printBackground: true,
-      margin: { top: "0.6cm", bottom: "0.6cm", left: "0.6cm", right: "0.6cm" },
+      margin: { top: "0", bottom: "0", left: "0", right: "0" },
       displayHeaderFooter: false,
     });
     await browser.close();

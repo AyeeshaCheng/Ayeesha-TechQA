@@ -13,6 +13,8 @@ interface JDInputProps {
   onRun: () => void;
   isRunning: boolean;
   disabled: boolean;
+  /** Called when OCR completes with image path info */
+  onOcrComplete?: (info: { imagePath: string; sourceType: "image" }) => void;
 }
 
 const SAMPLE_JD = `高级前端工程师 — 字节跳动
@@ -60,7 +62,7 @@ function cleanJdText(text: string): string {
     .trim();
 }
 
-export function JDInput({ value, onChange, onRun, isRunning, disabled }: JDInputProps) {
+export function JDInput({ value, onChange, onRun, isRunning, disabled, onOcrComplete }: JDInputProps) {
   const [ocrText, setOcrText] = useState("");
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrDone, setOcrDone] = useState(false);
@@ -86,6 +88,10 @@ export function JDInput({ value, onChange, onRun, isRunning, disabled }: JDInput
       setOcrText(cleaned);
       onChange(cleaned);
       setOcrDone(true);
+      // Notify parent about image path for DB persistence
+      if (data.imagePath && onOcrComplete) {
+        onOcrComplete({ imagePath: data.imagePath, sourceType: "image" });
+      }
     } catch (err) {
       setOcrError(err instanceof Error ? err.message : "OCR 识别失败");
     } finally {
