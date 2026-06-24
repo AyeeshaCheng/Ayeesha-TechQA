@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  email        String    @unique
+  passwordHash String?
+  githubId     String?   @unique
+  nickname     String
+  role         String    @default("reader")
+  createdAt    DateTime  @default(now())
+  lastLoginAt  DateTime  @default(now()) @updatedAt
+  articles     Article[]
+  media        Media[]
+}
+
+model Article {
+  id             Int           @id @default(autoincrement())
+  title          String
+  slug           String
+  content        String        @default("")
+  summary        String        @default("")
+  coverImageUrl  String?
+  status         String        @default("draft")
+  viewCount      Int           @default(0)
+  seoTitle       String?
+  seoDescription String?
+  ogImageUrl     String?
+  publishedAt    DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  authorId       Int
+  author         User          @relation(fields: [authorId], references: [id])
+  categoryId     Int?
+  category       Category?     @relation(fields: [categoryId], references: [id])
+  articleTags    ArticleTag[]
+
+  @@index([status, publishedAt])
+  @@index([authorId, status])
+  @@index([slug])
+}
+
+model Category {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  description String    @default("")
+  createdAt   DateTime  @default(now())
+  articles    Article[]
+}
+
+model Tag {
+  id           Int          @id @default(autoincrement())
+  name         String       @unique
+  createdAt    DateTime     @default(now())
+  articleTags  ArticleTag[]
+}
+
+model ArticleTag {
+  articleId Int
+  tagId     Int
+  article   Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Restrict)
+
+  @@id([articleId, tagId])
+}
+
+model Media {
+  id           Int      @id @default(autoincrement())
+  originalName String
+  storagePath  String
+  url          String
+  fileSize     Int
+  mimeType     String
+  uploaderId   Int
+  uploader     User     @relation(fields: [uploaderId], references: [id])
+  createdAt    DateTime @default(now())
+
+  @@index([uploaderId])
+}
+
+model SiteConfig {
+  id           Int    @id @default(1)
+  blogName     String @default("My Blog")
+  aboutContent String @default("")
+  socialLinks  String @default("{}")
+  logoUrl      String?
+}
