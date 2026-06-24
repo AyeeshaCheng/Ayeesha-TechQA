@@ -58,9 +58,12 @@ strings data.txt | grep '='
 
 
 | Level 10 → 11 | `base64 -d`, Base64 解码 |
+base64 -d data.txt # 转化base64为 base64 data.txt
+cat data.txt | grep base64 -d
 
 
 | Level 11 → 12 | `tr`, 字符替换 (ROT13) |
+cat data.txt | tr 'A-Za-z' 'N-ZA-Mn-za-m'   # 26个字幕循环向后13位，再次向后13位还原，A-Z 移动位 N-ZA-M
 
 
 | Level 12 → 13 | `xxd`, `gzip/bzip2/tar`, 十六进制与压缩 |
